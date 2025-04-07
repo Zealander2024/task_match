@@ -6,9 +6,13 @@ import { SignIn } from './pages/SignIn';
 import { SignUp } from './pages/SignUp';
 import { SelectRole } from './pages/SelectRole';
 import { EmployerDashboard } from './pages/employer/Dashboard';
-import { JobSeekerDashboard } from './pages/job-seeker/Dashboard';
+import { JobSeekerDashboard } from './components/JobSeekerDashboard';
 import { EditProfile } from './pages/EditProfile';
 import { RoleProtectedRoute } from './components/RoleProtectedRoute';
+import { Toaster } from './components/ui/toaster';
+import { JobSeekerApplicationsView } from './components/JobSeekerApplicationsView';
+import { MessagesPage } from './pages/MessagesPage';
+import { ChatPage } from './pages/ChatPage';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -140,19 +144,20 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/applications"
-            element={
-              <ProtectedRoute>
-                <RoleProtectedRoute
-                  allowedRoles={['job_seeker']}
-                  fallbackPath="/select-role"
-                >
-                  <div>Applications Page</div>
-                </RoleProtectedRoute>
-              </ProtectedRoute>
-            }
-          />
+          // In the routes section, update the applications route:
+                <Route
+                  path="/applications"
+                  element={
+                    <ProtectedRoute>
+                      <RoleProtectedRoute
+                        allowedRoles={['job_seeker']}
+                        fallbackPath="/select-role"
+                      >
+                        <JobSeekerApplicationsView />
+                      </RoleProtectedRoute>
+                    </ProtectedRoute>
+                  }
+                />
           <Route
             path="/settings"
             element={
@@ -166,7 +171,24 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/messages"
+            element={
+              <ProtectedRoute>
+                <MessagesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/messages/:conversationId"
+            element={
+              <ProtectedRoute>
+                <ChatPage />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
+        <Toaster />
       </AuthProvider>
     </Router>
   );

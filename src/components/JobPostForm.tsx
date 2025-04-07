@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { 
   Briefcase, DollarSign, MapPin, Clock, Calendar, FileText, CreditCard,
-  CheckCircle2, XCircle, ArrowRight, ArrowLeft, Plus, X, Tag
+  CheckCircle2, XCircle, ArrowRight, ArrowLeft, Plus, X, Tag, Building2,
+  Upload, Image as ImageIcon, User
 } from 'lucide-react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
@@ -12,7 +13,7 @@ interface JobPostFormProps {
   onSuccess?: () => void;
 }
 
-type FormStep = 'basic' | 'details' | 'requirements' | 'preview';
+type FormStep = 'basic' | 'company' | 'details' | 'requirements' | 'preview';
 
 export function JobPostForm({ onSuccess }: JobPostFormProps) {
   const { user } = useAuth();
@@ -38,7 +39,39 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
     start_date: '',
     end_date: '',
     payment_method: '',
+    company_name: '',
+    company_logo_url: '',
+    employer_avatar_url: '',
+    employer_email: '',
   });
+
+  useEffect(() => {
+    async function fetchEmployerProfile() {
+      if (!user) return;
+
+      try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('avatar_url, email')
+          .eq('id', user.id)
+          .single();
+
+        if (error) throw error;
+
+        if (profile) {
+          setFormData(prev => ({
+            ...prev,
+            employer_avatar_url: profile.avatar_url || '',
+            employer_email: profile.email || '',
+          }));
+        }
+      } catch (err) {
+        console.error('Error fetching employer profile:', err);
+      }
+    }
+
+    fetchEmployerProfile();
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -84,32 +117,41 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
     setSuccess(false);
 
     try {
-      // Format dates to ISO string
-      const formattedData = {
+      // Prepare the job post data
+      const jobPostData = {
         ...formData,
         employer_id: user.id,
         status: 'active',
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        start_date: new Date(formData.start_date).toISOString().split('T')[0],
-        end_date: new Date(formData.end_date).toISOString().split('T')[0],
         required_skills: formData.required_skills || [],
+        description: formData.description.replace(/<[^>]*>/g, ''), // Strip HTML tags
+        employer_avatar_url: formData.employer_avatar_url,
+        employer_email: formData.employer_email,
+        company_name: formData.company_name,
+        company_logo_url: formData.company_logo_url,
+        title: formData.title,
+        category: formData.category,
+        budget: formData.budget,
+        location: formData.location,
+        experience_level: formData.experience_level,
+        work_schedule: formData.work_schedule,
+        additional_requirements: formData.additional_requirements,
+        application_instructions: formData.application_instructions,
+        job_type: formData.job_type,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        payment_method: formData.payment_method,
       };
 
-      console.log('Submitting job:', formattedData); // Debug log
+      // Insert the job post
+      const { error: insertError } = await supabase
+        .from('job_posts')
+        .insert([jobPostData]);
 
-      const { data, error } = await supabase
-        .from('jobs')
-        .insert([formattedData])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase error:', error); // Debug log
-        throw error;
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw new Error(insertError.message || 'Failed to create job post');
       }
-
-      console.log('Job created:', data); // Debug log
 
       setSuccess(true);
       setFormData({
@@ -127,6 +169,10 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
         start_date: '',
         end_date: '',
         payment_method: '',
+        company_name: '',
+        company_logo_url: '',
+        employer_avatar_url: '',
+        employer_email: '',
       });
       setSkills([]);
 
@@ -141,6 +187,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
 
   const steps = [
     { id: 'basic', label: 'Basic Info' },
+    { id: 'company', label: 'Company Info' },
     { id: 'details', label: 'Job Details' },
     { id: 'requirements', label: 'Requirements' },
     { id: 'preview', label: 'Preview' },
@@ -241,6 +288,54 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
             }}
           />
         </div>
+      </div>
+    </div>
+  );
+
+  const renderCompanyInfo = () => (
+    <div className="space-y-6">
+      <div>
+        <label htmlFor="company_name" className="block text-sm font-medium text-gray-700">
+          Company Name
+        </label>
+        <div className="mt-1 relative rounded-md shadow-sm">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Building2 className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            id="company_name"
+            name="company_name"
+            value={formData.company_name}
+            onChange={handleChange}
+            required
+            className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            placeholder="Enter your company name"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="company_logo_url" className="block text-sm font-medium text-gray-700">
+          Company Logo URL
+        </label>
+        <div className="mt-1 relative rounded-md shadow-sm">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <ImageIcon className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="url"
+            id="company_logo_url"
+            name="company_logo_url"
+            value={formData.company_logo_url}
+            onChange={handleChange}
+            className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            placeholder="https://example.com/logo.png"
+          />
+        </div>
+        <p className="mt-1 text-sm text-gray-500">
+          Enter a direct URL to your company logo image
+        </p>
       </div>
     </div>
   );
@@ -501,7 +596,42 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
   const renderPreview = () => (
     <div className="space-y-6">
       <div className="bg-white shadow-sm rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-gray-900 mb-4">{formData.title}</h3>
+        <div className="flex items-center space-x-4 mb-4">
+          {formData.company_logo_url ? (
+            <img
+              src={formData.company_logo_url}
+              alt={formData.company_name}
+              className="h-12 w-12 object-contain rounded-lg border border-gray-200"
+            />
+          ) : (
+            <div className="h-12 w-12 flex items-center justify-center bg-gray-100 rounded-lg">
+              <Building2 className="h-6 w-6 text-gray-400" />
+            </div>
+          )}
+          <div>
+            <h3 className="text-xl font-semibold text-gray-900">{formData.company_name}</h3>
+            <p className="text-lg font-medium text-gray-900">{formData.title}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-4 mb-4 pt-4 border-t border-gray-200">
+          {formData.employer_avatar_url ? (
+            <img
+              src={formData.employer_avatar_url}
+              alt="Employer"
+              className="h-10 w-10 rounded-full object-cover"
+            />
+          ) : (
+            <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
+              <User className="h-6 w-6 text-gray-400" />
+            </div>
+          )}
+          <div>
+            <p className="text-sm font-medium text-gray-900">Posted by</p>
+            <p className="text-sm text-gray-500">{formData.employer_email}</p>
+          </div>
+        </div>
+
         <div className="space-y-4">
           <div className="flex items-center text-sm text-gray-500">
             <Briefcase className="h-4 w-4 mr-2" />
@@ -580,6 +710,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
 
       <div className="bg-white shadow-sm rounded-lg p-6">
         {currentStep === 'basic' && renderBasicInfo()}
+        {currentStep === 'company' && renderCompanyInfo()}
         {currentStep === 'details' && renderJobDetails()}
         {currentStep === 'requirements' && renderRequirements()}
         {currentStep === 'preview' && renderPreview()}

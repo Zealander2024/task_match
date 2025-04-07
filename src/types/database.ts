@@ -1,17 +1,9 @@
 export interface Profile {
   id: string;
-  role: 'admin' | 'employer' | 'job_seeker';
   full_name: string;
-  bio?: string;
+  email: string;
   avatar_url?: string;
-  work_email?: string;
-  years_of_experience?: number;
-  skills?: string[];
-  portfolio_images?: {
-    url: string;
-    link?: string;
-  }[];
-  resume_url?: string;
+  role: 'employer' | 'job_seeker';
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +48,8 @@ export interface Application {
 export interface JobPost {
   id: string;
   employer_id: string;
+  company_name: string;
+  company_logo_url?: string;
   title: string;
   category: string;
   description: string;
@@ -73,4 +67,6 @@ export interface JobPost {
   status: 'active' | 'closed' | 'draft';
   created_at: string;
   updated_at: string;
+  employer_avatar_url?: string;
+  employer_email?: string;
 }
