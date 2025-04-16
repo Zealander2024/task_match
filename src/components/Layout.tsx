@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, User, Briefcase, Home, Settings, FileText, Building2, Users, Mail, Calendar, Image, UserPlus, Users2 } from 'lucide-react';
+import { LogOut, User, Briefcase, Home, Settings, FileText, Building2, Users, Mail, Calendar, Image, UserPlus, Users2, Menu, X } from 'lucide-react';
 import { JobSeekerProfile } from './JobSeekerProfile';
 import { UsersSidebar } from './UsersSidebar';
 import { supabase } from '../services/supabase';
@@ -18,6 +18,8 @@ export function Layout({ children }: LayoutProps) {
   const [loading, setLoading] = useState(true);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -84,121 +86,136 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sticky Header */}
-      <header className="sticky top-0 z-50 bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <Link to="/" className="flex items-center">
-                <Briefcase className="h-8 w-8 text-blue-600" />
-                <span className="ml-2 text-xl font-bold text-gray-800">TaskMatch</span>
-              </Link>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              {user && (
-                <button
-                  onClick={() => signOut()}
-                  className="flex items-center text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  <LogOut className="h-4 w-4 mr-1" />
-                  Sign Out
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="flex">
-        {/* Sticky Left Sidebar */}
-        <div className="sticky top-16 h-[calc(100vh-4rem)] w-64 bg-white shadow-sm overflow-y-auto">
-          <div className="p-4">
-            {user && (
-              <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="relative">
-                    <div className="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center overflow-hidden">
-                      {profile?.avatar_url ? (
-                        <img
-                          src={profile.avatar_url}
-                          alt={profile.full_name || 'Profile'}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <Image className="h-8 w-8 text-blue-600" />
-                      )}
-                    </div>
-                    <div className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-green-400 border-2 border-white"></div>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{profile?.full_name || 'Set your name'}</p>
-                    <p className="text-xs text-green-500 capitalize">{user.role}</p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Mail className="h-4 w-4 mr-2" />
-                    <span>{user.email}</span>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    <span>Member since {new Date().toLocaleDateString()}</span>
-                  </div>
-                </div>
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center">
-                      <div className="flex items-center justify-center text-sm text-gray-600 mb-1">
-                        <Users2 className="h-4 w-4 mr-1" />
-                        <span>Followers</span>
-                      </div>
-                      <div className="text-lg font-semibold text-gray-900">{followersCount}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center text-sm text-gray-600 mb-1">
-                        <UserPlus className="h-4 w-4 mr-1" />
-                        <span>Following</span>
-                      </div>
-                      <div className="text-lg font-semibold text-gray-900">{followingCount}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+      {/* Top Navigation Bar */}
+      <div className="sticky top-0 z-40 bg-white shadow-sm">
+        <div className="flex items-center justify-between px-4 h-16">
+          {/* Left Menu Button */}
+          <button
+            onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
+            className="lg:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100"
+          >
+            {isLeftSidebarOpen ? (
+              <X className="h-6 w-6" />
+            ) : (
+              <Menu className="h-6 w-6" />
             )}
+          </button>
 
-            <nav className="space-y-1">
-              {navigation.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
-                      isActive(item.href)
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Icon className="h-5 w-5 mr-3" />
-                    {item.name}
-                  </Link>
-                );
-              })}
-            </nav>
+          {/* Logo and other header content */}
+          <div className="flex-1 flex justify-center lg:justify-start">
+            <Link to="/" className="flex items-center">
+              <Briefcase className="h-8 w-8 text-blue-600" />
+              <span className="ml-2 text-xl font-bold text-gray-800">TaskMatch</span>
+            </Link>
+          </div>
+
+          {/* Right Menu Button */}
+          <button
+            onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
+            className="md:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex relative">
+        {/* Left Sidebar - Mobile Overlay */}
+        <div
+          className={`fixed inset-0 bg-gray-600 bg-opacity-75 transition-opacity lg:hidden ${
+            isLeftSidebarOpen ? 'opacity-100 z-30' : 'opacity-0 -z-10'
+          }`}
+          onClick={() => setIsLeftSidebarOpen(false)}
+        />
+
+        {/* Left Sidebar */}
+        <div
+          className={`
+            fixed lg:sticky top-16 h-[calc(100vh-4rem)] w-64 bg-white shadow-sm
+            transform transition-transform duration-300 ease-in-out lg:transform-none
+            ${isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+            z-30 lg:z-0
+          `}
+        >
+          <div className="h-full overflow-y-auto">
+            <div className="p-4">
+              {user && (
+                <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <div className="relative">
+                      <div className="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center overflow-hidden">
+                        {profile?.avatar_url ? (
+                          <img
+                            src={profile.avatar_url}
+                            alt={profile.full_name || 'Profile'}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Image className="h-8 w-8 text-blue-600" />
+                        )}
+                      </div>
+                    </div>
+                    {/* User info */}
+                  </div>
+                </div>
+              )}
+
+              <nav className="space-y-1">
+                {navigation.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.name}
+                      to={item.href}
+                      onClick={() => setIsLeftSidebarOpen(false)}
+                      className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+                        isActive(item.href)
+                          ? 'bg-blue-50 text-blue-700'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Icon className="h-5 w-5 mr-3" />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 p-6">
-          {children}
+        <div className="flex-1 min-w-0 bg-gray-50">
+          <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+            {children}
+          </div>
         </div>
 
+        {/* Right Sidebar - Mobile Overlay */}
+        <div
+          className={`fixed inset-0 bg-gray-600 bg-opacity-75 transition-opacity md:hidden ${
+            isRightSidebarOpen ? 'opacity-100 z-30' : 'opacity-0 -z-10'
+          }`}
+          onClick={() => setIsRightSidebarOpen(false)}
+        />
+
         {/* Right Sidebar */}
-        <div className="sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
-          <UsersSidebar />
+        <div
+          className={`
+            fixed md:sticky top-16 h-[calc(100vh-4rem)] w-64 bg-white shadow-sm
+            transform transition-transform duration-300 ease-in-out md:transform-none
+            ${isRightSidebarOpen ? 'translate-x-0 right-0' : 'translate-x-full md:translate-x-0'}
+            z-30 md:z-0
+          `}
+        >
+          <div className="h-full overflow-y-auto">
+            <UsersSidebar onClose={() => setIsRightSidebarOpen(false)} />
+          </div>
         </div>
       </div>
     </div>
   );
 } 
+
+
+
