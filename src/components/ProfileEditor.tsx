@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../services/supabase';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
@@ -17,9 +17,9 @@ interface Profile {
   bio: string | null;
   work_email: string | null;
   years_of_experience: number | null;
-  skills: string | null;
-  portfolio_images: any[] | null;
+  skills: string[];
   resume_url: string | null;
+  role: 'employer' | 'job_seeker';
 }
 
 export function ProfileEditor() {
@@ -77,33 +77,20 @@ export function ProfileEditor() {
     setResumeFile(file);
   };
 
-  const handleSave = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!user || !profile) return;
-    
-    setSaving(true);
-    try {
-      // Handle skills conversion properly
-      const skillsArray = Array.isArray(profile.skills)
-        ? profile.skills
-        : profile.skills
-          ? profile.skills.split(',').map(skill => skill.trim()).filter(Boolean)
-          : [];
 
-      const profileData = {
-        id: user.id,
-        full_name: profile.full_name,
-        bio: profile.bio,
-        work_email: profile.work_email,
-        years_of_experience: profile.years_of_experience,
-        skills: skillsArray,
-        avatar_url: profile.avatar_url,
-        resume_url: profile.resume_url,
-        updated_at: new Date().toISOString()
-      };
+    try {
+      setSaving(true);
 
       const { error } = await supabase
         .from('profiles')
-        .upsert(profileData);
+        .update({
+          ...profile,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
 
       if (error) throw error;
       
@@ -238,7 +225,7 @@ export function ProfileEditor() {
 
             {/* Save Button */}
             <Button
-              onClick={handleSave}
+              onClick={handleSubmit}
               disabled={saving}
               className="w-full"
             >

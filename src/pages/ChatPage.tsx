@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { MessagesPage } from './MessagesPage';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../services/supabase';
 
 export function ChatPage() {
   const { conversationId } = useParams<{ conversationId: string }>();

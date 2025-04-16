@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { formatDistanceToNow } from 'date-fns';
 import { Download, Eye, Mail, Phone } from 'lucide-react';
 
@@ -38,112 +38,89 @@ export function EmployerApplicationsView({ jobId }: { jobId?: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalApplications, setTotalApplications] = useState(0);
+  const itemsPerPage = 10;
+
+  const fetchApplications = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch job posts by employer
+      const { data: jobPosts, error: jobPostsError } = await supabase
+        .from('job_posts')
+        .select('id')
+        .eq('employer_id', user?.id);
+        
+      if (jobPostsError) throw jobPostsError;
+      
+      if (!jobPosts || jobPosts.length === 0) {
+        setApplications([]);
+        return;
+      }
+      
+      const jobPostIds = jobPosts.map(post => post.id);
+      
+      // Get total count
+      let countQuery = supabase
+        .from('job_applications')
+        .select('*', { count: 'exact', head: true });
+      
+      if (jobId) {
+        countQuery = countQuery.eq('job_post_id', jobId);
+      } else {
+        countQuery = countQuery.in('job_post_id', jobPostIds);
+      }
+
+      if (activeTab !== 'all') {
+        countQuery = countQuery.eq('status', activeTab);
+      }
+
+      const { count } = await countQuery;
+      setTotalApplications(count || 0);
+      
+      // Fetch paginated applications
+      let query = supabase
+        .from('job_applications')
+        .select(`
+          *,
+          job_posts:job_post_id (title),
+          job_seekers:job_seeker_id (id, email, user_metadata)
+        `);
+      
+      if (jobId) {
+        query = query.eq('job_post_id', jobId);
+      } else {
+        query = query.in('job_post_id', jobPostIds);
+      }
+
+      if (activeTab !== 'all') {
+        query = query.eq('status', activeTab);
+      }
+      
+      const { data, error: applicationsError } = await query
+        .order('created_at', { ascending: false })
+        .range(
+          (currentPage - 1) * itemsPerPage,
+          currentPage * itemsPerPage - 1
+        );
+      
+      if (applicationsError) throw applicationsError;
+      setApplications(data || []);
+      
+    } catch (err) {
+      console.error('Error fetching applications:', err);
+      setError('Failed to load applications');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchApplications = async () => {
-      try {
-        setLoading(true);
-        
-        // Fetch all job posts by this employer first
-        const { data: jobPosts, error: jobPostsError } = await supabase
-          .from('job_posts')
-          .select('id')
-          .eq('employer_id', user?.id);
-          
-        if (jobPostsError) throw jobPostsError;
-        
-        if (!jobPosts || jobPosts.length === 0) {
-          setApplications([]);
-          return;
-        }
-        
-        const jobPostIds = jobPosts.map(post => post.id);
-        
-        // Then fetch applications for these job posts
-        let query = supabase
-          .from('job_applications')
-          .select(`
-            *,
-            job_posts:job_post_id (
-              id,
-              title
-            ),
-            job_seekers:job_seeker_id (
-              id, 
-              email,
-              user_metadata
-            )
-          `);
-        
-        if (jobId) {
-          // If specific job ID is provided, filter by it
-          query = query.eq('job_post_id', jobId);
-        } else {
-          // Otherwise, get applications for all jobs by this employer
-          query = query.in('job_post_id', jobPostIds);
-        }
-        
-        const { data, error: applicationsError } = await query
-          .order('created_at', { ascending: false });
-        
-        if (applicationsError) throw applicationsError;
-        
-        // Mark notifications as read for these applications
-        if (data && data.length > 0) {
-          const applicationIds = data.map(app => app.id);
-          
-          await supabase
-            .from('notifications')
-            .update({ read: true })
-            .eq('user_id', user?.id)
-            .in('application_id', applicationIds)
-            .eq('read', false);
-        }
-        
-        setApplications(data || []);
-      } catch (err) {
-        console.error('Error fetching applications:', err);
-        setError('Failed to load applications');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (user) {
       fetchApplications();
-      
-      // Set up real-time subscription for new applications
-      const subscription = supabase
-        .channel('public:job_applications')
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'job_applications',
-          filter: jobId ? `job_post_id=eq.${jobId}` : undefined
-        }, (payload) => {
-          // Fetch the complete application with relations
-          supabase
-            .from('job_applications')
-            .select(`
-              *,
-              job_posts:job_post_id (title),
-              job_seekers:job_seeker_id (id, email, user_metadata)
-            `)
-            .eq('id', payload.new.id)
-            .single()
-            .then(({ data }) => {
-              if (data) {
-                setApplications(prev => [data, ...prev]);
-              }
-            });
-        })
-        .subscribe();
-        
-      return () => {
-        supabase.removeChannel(subscription);
-      };
     }
-  }, [jobId, user]);
+  }, [jobId, user, activeTab, currentPage]);
 
   // Add this function to create a notification when application status changes
   const notifyApplicant = async (applicationId: string, status: string, applicantId: string) => {
@@ -365,6 +342,13 @@ export function EmployerApplicationsView({ jobId }: { jobId?: string }) {
           ))}
         </TabsContent>
       </Tabs>
+      <Pagination
+        currentPage={currentPage}
+        totalPages={Math.ceil(totalApplications / itemsPerPage)}
+        onPageChange={setCurrentPage}
+        itemsPerPage={itemsPerPage}
+        totalItems={totalApplications}
+      />
     </div>
   );
 }

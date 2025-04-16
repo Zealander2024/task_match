@@ -1,9 +1,50 @@
+export interface Education {
+  institution: string;
+  degree: string;
+  field: string;
+  start_date: string;
+  end_date?: string;
+  current?: boolean;
+  description?: string;
+}
+
+export interface WorkExperience {
+  company: string;
+  position: string;
+  location: string;
+  start_date: string;
+  end_date?: string;
+  current?: boolean;
+  description: string;
+  achievements?: string[];
+}
+
+export interface Certification {
+  name: string;
+  issuer: string;
+  issue_date: string;
+  expiry_date?: string;
+  credential_id?: string;
+  url?: string;
+}
+
+export interface SocialLinks {
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+  twitter?: string;
+}
+
 export interface Profile {
   id: string;
   full_name: string;
-  email: string;
-  avatar_url?: string;
   role: 'employer' | 'job_seeker';
+  bio?: string;
+  work_email?: string;
+  years_of_experience?: number;
+  skills?: string[];
+  avatar_url?: string;
+  resume_url?: string;
   created_at: string;
   updated_at: string;
 }
@@ -70,3 +111,7 @@ export interface JobPost {
   employer_avatar_url?: string;
   employer_email?: string;
 }
+
+
+
+

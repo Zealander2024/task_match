@@ -1,27 +1,85 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { JobPost } from '../types/database';
 import { JobPostsList } from './JobPostsList';
 import { JobPostDialog } from './JobPostDialog';
-import { supabase } from '../lib/supabase';
+import { JobSearch } from './JobSearch';
+import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
+import type { SearchFilters } from './JobSearch';
 
 export function JobSeekerDashboard() {
   const [selectedJob, setSelectedJob] = useState<JobPost | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [jobs, setJobs] = useState<JobPost[]>([]);
   const { user } = useAuth();
+  const isSearching = useRef(false);
 
   useEffect(() => {
     if (!user) return;
-    // You can add any additional initialization here
-    setLoading(false);
+    fetchInitialJobs();
   }, [user]);
 
-  const handleJobSelect = (job: JobPost) => {
+  const fetchInitialJobs = async () => {
+    if (isSearching.current) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('job_posts')
+        .select('*')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      setJobs(data || []);
+    } catch (err) {
+      console.error('Error fetching initial jobs:', err);
+      setError('Failed to fetch jobs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = useCallback(async (filters: SearchFilters) => {
+    isSearching.current = true;
+    setLoading(true);
+
+    try {
+      let query = supabase
+        .from('job_posts')
+        .select('*')
+        .eq('status', 'active');
+
+      // Apply filters
+      if (filters.query) {
+        query = query.or(`title.ilike.%${filters.query}%,description.ilike.%${filters.query}%`);
+      }
+
+      if (filters.jobType.length > 0) {
+        query = query.in('job_type', filters.jobType);
+      }
+
+      // Add other filter conditions...
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setJobs(data || []);
+    } catch (err) {
+      console.error('Search error:', err);
+      setError('Failed to search jobs');
+    } finally {
+      setLoading(false);
+      isSearching.current = false;
+    }
+  }, []);
+
+  const handleJobSelect = useCallback((job: JobPost) => {
     setSelectedJob(job);
     setDialogOpen(true);
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -44,6 +102,8 @@ export function JobSeekerDashboard() {
     );
   }
 
+  console.log('Rendering JobSeekerDashboard');
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
@@ -51,6 +111,11 @@ export function JobSeekerDashboard() {
           <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Job Seeker Dashboard</h1>
             <p className="text-gray-600">Browse available jobs and find your next opportunity</p>
+            
+            {/* Search Component */}
+            <div className="mt-6">
+              <JobSearch onSearch={handleSearch} />
+            </div>
           </div>
 
           {/* Job Posts Section */}
@@ -69,3 +134,6 @@ export function JobSeekerDashboard() {
     </div>
   );
 } 
+
+
+

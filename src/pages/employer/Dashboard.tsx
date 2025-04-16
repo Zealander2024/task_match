@@ -8,9 +8,38 @@ import {
   Trash2, Building2, User, Mail, Plus, X
 } from 'lucide-react';
 import type { JobPost, Profile } from '../../types/database';
+import { useNavigate } from 'react-router-dom';
 
 export function EmployerDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkProfile = async () => {
+      if (!user) {
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('role, id')
+        .eq('id', user.id)
+        .single();
+
+      if (error || !profile) {
+        navigate('/select-role', { replace: true });
+        return;
+      }
+
+      if (profile.role !== 'employer') {
+        navigate('/select-role', { replace: true });
+      }
+    };
+
+    checkProfile();
+  }, [user, navigate]);
+
   const [jobPosts, setJobPosts] = useState<JobPost[]>([]);
   const [employerProfile, setEmployerProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -182,3 +211,4 @@ export function EmployerDashboard() {
     </div>
   );
 }
+

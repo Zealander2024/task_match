@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from './ui/button';
+import { supabase } from '../services/supabase';
 import {
   Form,
   FormControl,
@@ -14,7 +15,7 @@ import {
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { useToast } from './ui/use-toast';
-import { supabase } from '../lib/supabase';
+
 import { useAuth } from '../context/AuthContext';
 
 const applicationSchema = z.object({

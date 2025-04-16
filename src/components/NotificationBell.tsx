@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Bell, BellRing, User, Briefcase, Calendar, CheckCircle, XCircle, Clock, FileText, Mail, Phone } from 'lucide-react';
 import {

@@ -1,32 +1,52 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../services/supabase';
 import { JobPost } from '../types/database';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Calendar, MapPin, Briefcase, DollarSign, Clock } from 'lucide-react';
 import { format } from 'date-fns';
+import { Pagination } from './ui/Pagination';
 
 interface JobPostsListProps {
-  onJobSelect?: (job: JobPost) => void;
+  onJobSelect: (jobId: string) => void;
 }
 
 export function JobPostsList({ onJobSelect }: JobPostsListProps) {
   const [jobs, setJobs] = useState<JobPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalJobs, setTotalJobs] = useState(0);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     fetchJobPosts();
-  }, []);
+  }, [currentPage]);
 
   const fetchJobPosts = async () => {
     try {
+      setLoading(true);
+      
+      // First, get the total count
+      const { count, error: countError } = await supabase
+        .from('job_posts')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
+
+      if (countError) throw countError;
+      setTotalJobs(count || 0);
+
+      // Then fetch the paginated data
       const { data, error } = await supabase
         .from('job_posts')
         .select('*')
         .eq('status', 'active')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(
+          (currentPage - 1) * itemsPerPage,
+          currentPage * itemsPerPage - 1
+        );
 
       if (error) throw error;
       setJobs(data || []);
@@ -38,16 +58,20 @@ export function JobPostsList({ onJobSelect }: JobPostsListProps) {
     }
   };
 
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
   if (loading) {
     return <div className="text-center py-8">Loading job posts...</div>;
   }
 
   if (error) {
-    return <div className="text-center py-8 text-red-500">{error}</div>;
+    return <div className="text-center text-red-500 py-8">{error}</div>;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <h2 className="text-2xl font-bold">Available Jobs</h2>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {jobs.map((job) => (
@@ -111,6 +135,14 @@ export function JobPostsList({ onJobSelect }: JobPostsListProps) {
           </Card>
         ))}
       </div>
+
+      <Pagination
+        currentPage={currentPage}
+        totalPages={Math.ceil(totalJobs / itemsPerPage)}
+        onPageChange={handlePageChange}
+        itemsPerPage={itemsPerPage}
+        totalItems={totalJobs}
+      />
     </div>
   );
 } 

@@ -5,27 +5,19 @@ import { supabase } from '../services/supabase';
 
 interface RoleProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles: string[];
+  allowedRoles: ('employer' | 'job_seeker')[];
   fallbackPath: string;
 }
 
 export function RoleProtectedRoute({ children, allowedRoles, fallbackPath }: RoleProtectedRouteProps) {
   const { user, loading } = useAuth();
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (!user) {
-    return <Navigate to="/signin" />;
-  }
-
-  // Fetch user's role from profiles table
   const [userRole, setUserRole] = React.useState<string | null>(null);
   const [roleLoading, setRoleLoading] = React.useState(true);
 
   React.useEffect(() => {
     const fetchUserRole = async () => {
+      if (!user) return;
+      
       try {
         const { data, error } = await supabase
           .from('profiles')
@@ -43,16 +35,17 @@ export function RoleProtectedRoute({ children, allowedRoles, fallbackPath }: Rol
     };
 
     fetchUserRole();
-  }, [user.id]);
+  }, [user]);
 
-  if (roleLoading) {
+  if (loading || roleLoading) {
     return <div>Loading...</div>;
   }
 
-  // Check if user has the required role
-  const hasRequiredRole = allowedRoles.includes(userRole || '');
+  if (!user) {
+    return <Navigate to="/signin" />;
+  }
 
-  if (!hasRequiredRole) {
+  if (!userRole || !allowedRoles.includes(userRole as 'employer' | 'job_seeker')) {
     return <Navigate to={fallbackPath} />;
   }
 

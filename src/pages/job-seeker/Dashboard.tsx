@@ -1,51 +1,136 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../services/supabase';
-import { Briefcase, Clock, CheckCircle, XCircle, User } from 'lucide-react';
+import { Briefcase, Clock, CheckCircle, XCircle, User, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Job, Application } from '../../types/database';
 import { JobSeekerProfile } from '../../components/JobSeekerProfile';
+import { JobSearch } from '../../components/JobSearch';
+import { JobCard } from '../../components/JobCard';
+import type { SearchFilters } from '../../components/JobSearch';
 
-export function JobSeekerDashboard() {
+export function Dashboard() {
   const { user } = useAuth();
   const [applications, setApplications] = useState<Application[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!user) return;
-
-      try {
-        // Fetch user's applications
-        const { data: applicationsData } = await supabase
-          .from('applications')
-          .select('*')
-          .eq('applicant_id', user.id);
-
-        if (applicationsData) {
-          setApplications(applicationsData);
-
-          // Fetch published jobs
-          const { data: jobsData } = await supabase
-            .from('jobs')
-            .select('*')
-            .eq('status', 'published')
-            .limit(5);
-
-          if (jobsData) {
-            setJobs(jobsData);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+    fetchInitialData();
   }, [user]);
+
+  const fetchInitialData = async () => {
+    if (!user) return;
+
+    try {
+      const { data: jobsData, error: jobsError } = await supabase
+        .from('job_posts')
+        .select(`
+          *,
+          employer:employer_id(
+            full_name,
+            company_name,
+            avatar_url
+          )
+        `)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (jobsError) throw jobsError;
+      setJobs(jobsData || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setError('Failed to load initial data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = async (filters: SearchFilters) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      let query = supabase
+        .from('job_posts')
+        .select(`
+          *,
+          employer:employer_id(
+            full_name,
+            company_name,
+            avatar_url
+          )
+        `)
+        .eq('status', 'active');
+
+      // Apply filters
+      if (filters.query) {
+        query = query.or(`title.ilike.%${filters.query}%,description.ilike.%${filters.query}%`);
+      }
+
+      if (filters.jobType.length > 0) {
+        query = query.in('job_type', filters.jobType);
+      }
+
+      if (filters.experienceLevel) {
+        query = query.eq('experience_level', filters.experienceLevel);
+      }
+
+      if (filters.salary) {
+        query = query
+          .gte('salary_min', filters.salary[0])
+          .lte('salary_max', filters.salary[1]);
+      }
+
+      if (filters.location) {
+        query = query.ilike('location', `%${filters.location}%`);
+      }
+
+      if (filters.remote) {
+        query = query.eq('is_remote', true);
+      }
+
+      if (filters.industry) {
+        query = query.eq('industry', filters.industry);
+      }
+
+      if (filters.postedWithin) {
+        const date = new Date();
+        switch (filters.postedWithin) {
+          case '24 hours':
+            date.setHours(date.getHours() - 24);
+            break;
+          case '7 days':
+            date.setDate(date.getDate() - 7);
+            break;
+          case '14 days':
+            date.setDate(date.getDate() - 14);
+            break;
+          case '30 days':
+            date.setDate(date.getDate() - 30);
+            break;
+        }
+        query = query.gte('created_at', date.toISOString());
+      }
+
+      if (filters.skills.length > 0) {
+        query = query.contains('required_skills', filters.skills);
+      }
+
+      const { data, error: searchError } = await query
+        .order('created_at', { ascending: false });
+
+      if (searchError) throw searchError;
+      setJobs(data || []);
+    } catch (err) {
+      console.error('Error searching jobs:', err);
+      setError('Failed to search jobs');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -57,156 +142,52 @@ export function JobSeekerDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Job Seeker Dashboard</h1>
-        </div>
-
-        <div className="flex gap-8">
-          {/* Left Sidebar - Profile */}
-          <div className="w-80 flex-shrink-0">
-            <JobSeekerProfile />
-          </div>
-
-          {/* Main Content */}
-          <div className="flex-1">
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Total Applications Card */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Briefcase className="h-6 w-6 text-gray-400" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Total Applications
-                    </dt>
-                    <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {applications.length}
-                      </div>
-                    </dd>
-                  </dl>
-                </div>
-              </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Search Section */}
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Find Your Next Opportunity</h1>
+            <p className="text-gray-600 mb-6">Search through thousands of job listings</p>
+            
+            <div className="w-full">
+              <JobSearch onSearch={handleSearch} />
             </div>
           </div>
 
-          {/* Pending Applications Card */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Clock className="h-6 w-6 text-gray-400" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Pending
-                    </dt>
-                    <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {applications.filter(app => app.status === 'pending').length}
-                      </div>
-                    </dd>
-                  </dl>
-                </div>
-              </div>
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
+              {error}
             </div>
-          </div>
+          )}
 
-          {/* Accepted Applications Card */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <CheckCircle className="h-6 w-6 text-gray-400" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Accepted
-                    </dt>
-                    <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {applications.filter(app => app.status === 'accepted').length}
-                      </div>
-                    </dd>
-                  </dl>
-                </div>
+          {/* Job Listings */}
+          <div className="space-y-6">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Job Listings */}
-        <div className="mt-8">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Job Listings</h2>
-          <div className="bg-white shadow overflow-hidden sm:rounded-md">
-            <ul className="divide-y divide-gray-200">
-              {jobs.map((job) => (
-                <li key={job.id}>
-                  <div className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium text-blue-600 truncate">
-                        {job.title}
-                      </div>
-                      <div className="ml-2 flex-shrink-0 flex">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                          {job.type}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-2 sm:flex sm:justify-between">
-                      <div className="sm:flex">
-                        <div className="flex items-center text-sm text-gray-500">
-                          <Briefcase className="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-400" />
-                          {job.location}
-                        </div>
-                      </div>
-                      <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
-                        {job.salary_range}
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        {/* Recent Applications */}
-        <div className="mt-8">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Your Applications</h2>
-          <div className="bg-white shadow overflow-hidden sm:rounded-md">
-            <ul className="divide-y divide-gray-200">
-              {applications.slice(0, 5).map((application) => (
-                <li key={application.id}>
-                  <div className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium text-gray-900">
-                        Application #{application.id.slice(0, 8)}
-                      </div>
-                      <div className="ml-2 flex-shrink-0 flex">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                          ${application.status === 'accepted' ? 'bg-green-100 text-green-800' : 
-                            application.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                            'bg-red-100 text-red-800'}`}>
-                          {application.status}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            ) : jobs.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-lg shadow-sm">
+                <p className="text-gray-500">No jobs found matching your criteria</p>
               </div>
-            </div>
+            ) : (
+              jobs.map((job) => (
+                <JobCard
+                  key={job.id}
+                  job={job}
+                  onApply={() => {/* Handle apply */}}
+                />
+              ))
+            )}
           </div>
         </div>
       </div>
     </div>
   );
 }
+
+
+
+
+
