@@ -9,6 +9,15 @@ export function Navbar() {
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
 
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      setIsMenuOpen(false); // Close mobile menu after signing out
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   return (
     <nav className="bg-white shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -30,13 +39,15 @@ export function Navbar() {
                 >
                   Dashboard
                 </Link>
-                <button
-                  onClick={() => signOut()}
-                  className="flex items-center text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  <LogOut className="h-4 w-4 mr-1" />
-                  Sign Out
-                </button>
+                <div className="relative ml-3">
+                  <button
+                    onClick={handleSignOut}
+                    className="flex items-center text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </button>
+                </div>
               </>
             ) : (
               <>
@@ -85,7 +96,7 @@ export function Navbar() {
                   Dashboard
                 </Link>
                 <button
-                  onClick={() => signOut()}
+                  onClick={handleSignOut}
                   className="w-full text-left flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-600"
                 >
                   <LogOut className="h-4 w-4 mr-2" />

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, User, Briefcase, Home, Settings, FileText, Building2, Users, Mail, Calendar, Image, UserPlus, Users2, Menu, X } from 'lucide-react';
+import { LogOut, User, Briefcase, Home, Settings, FileText, Building2, Users, Mail, Calendar, Image, UserPlus, Users2, Menu, X, Loader2 } from 'lucide-react';
 import { JobSeekerProfile } from './JobSeekerProfile';
 import { UsersSidebar } from './UsersSidebar';
 import { supabase } from '../services/supabase';
@@ -14,19 +14,40 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const { user, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
+  const [isSwitchingRole, setIsSwitchingRole] = useState(false);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      // No need to handle navigation as AuthContext will handle it
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  useEffect(() => {
+    const handleRoleChange = () => {
+      setIsSwitchingRole(false);
+      // Force a refresh of the profile data
+      fetchProfile();
+    };
+
+    window.addEventListener('roleChanged', handleRoleChange);
+    return () => window.removeEventListener('roleChanged', handleRoleChange);
+  }, []);
 
   useEffect(() => {
     async function fetchProfile() {
       if (!user) return;
 
       try {
-        // Fetch profile data
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -35,6 +56,7 @@ export function Layout({ children }: LayoutProps) {
 
         if (profileError) throw profileError;
         setProfile(profileData);
+        setIsSwitchingRole(false); // Reset switching state after profile fetch
 
         // Fetch followers count
         const { count: followersCount, error: followersError } = await supabase
@@ -56,6 +78,7 @@ export function Layout({ children }: LayoutProps) {
 
       } catch (error) {
         console.error('Error fetching profile data:', error);
+        setIsSwitchingRole(false); // Reset switching state on error
       } finally {
         setLoading(false);
       }
@@ -77,12 +100,17 @@ export function Layout({ children }: LayoutProps) {
 
   const employerNavigation = [
     { name: 'Dashboard', href: '/employer/dashboard', icon: Home },
-    { name: 'Company Profile', href: '/employer/profile', icon: Building2 },
+    { name: 'Company Profile', href: '/employer/company-profile', icon: Building2 }, // Make sure this matches exactly
     { name: 'Candidates', href: '/employer/candidates', icon: Users },
     { name: 'Settings', href: '/employer/settings', icon: Settings },
   ];
 
-  const navigation = user?.role === 'employer' ? employerNavigation : jobSeekerNavigation;
+  const navigation = profile?.role === 'employer' ? employerNavigation : jobSeekerNavigation;
+
+  const handleRoleSwitch = () => {
+    setIsSwitchingRole(true);
+    navigate('/select-role');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -109,13 +137,48 @@ export function Layout({ children }: LayoutProps) {
             </Link>
           </div>
 
-          {/* Right Menu Button */}
-          <button
-            onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
-            className="md:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
+          {/* User Actions */}
+          <div className="flex items-center space-x-4">
+            {/* Role Indicator and Switch */}
+            {profile && (
+              <Link
+                to="/select-role"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleRoleSwitch();
+                }}
+                className="hidden md:flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 rounded-md"
+              >
+                {isSwitchingRole ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : profile.role === 'employer' ? (
+                  <Briefcase className="h-4 w-4 mr-2" />
+                ) : (
+                  <User className="h-4 w-4 mr-2" />
+                )}
+                <span className="capitalize">
+                  {isSwitchingRole ? 'Switching...' : profile.role?.replace('_', ' ')}
+                </span>
+              </Link>
+            )}
+
+            {/* Sign Out Button */}
+            <button
+              onClick={handleSignOut}
+              className="hidden md:flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-red-600 rounded-md"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              <span>Sign Out</span>
+            </button>
+
+            {/* Right Menu Button */}
+            <button
+              onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
+              className="md:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -155,7 +218,26 @@ export function Layout({ children }: LayoutProps) {
                         )}
                       </div>
                     </div>
-                    {/* User info */}
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {profile?.full_name || user.email}
+                      </div>
+                      <div className="text-sm text-gray-500 capitalize">
+                        {profile?.role?.replace('_', ' ')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Add Followers/Following Stats */}
+                  <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-200">
+                    <div className="text-center">
+                      <div className="text-sm font-medium text-gray-900">{followersCount}</div>
+                      <div className="text-xs text-gray-500">Followers</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm font-medium text-gray-900">{followingCount}</div>
+                      <div className="text-xs text-gray-500">Following</div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -179,6 +261,8 @@ export function Layout({ children }: LayoutProps) {
                     </Link>
                   );
                 })}
+                
+               
               </nav>
             </div>
           </div>
@@ -216,6 +300,12 @@ export function Layout({ children }: LayoutProps) {
     </div>
   );
 } 
+
+
+
+
+
+
 
 
 

@@ -19,6 +19,8 @@ interface EmployerProfile {
   linkedin_url?: string;
   benefits?: string[];
   culture_description?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const companySizeOptions = [
@@ -50,6 +52,7 @@ export function EmployerProfileForm() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [isNewProfile, setIsNewProfile] = useState(true);
   const [profile, setProfile] = useState<EmployerProfile>({
     id: user?.id || '',
     company_name: '',
@@ -84,6 +87,7 @@ export function EmployerProfileForm() {
 
         if (data) {
           setProfile(data);
+          setIsNewProfile(false);
         }
       } catch (err) {
         console.error('Error fetching employer profile:', err);
@@ -99,21 +103,47 @@ export function EmployerProfileForm() {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user?.id}-${Math.random()}.${fileExt}`;
       const filePath = `company-logos/${fileName}`;
+      const bucketName = 'company-assets';
 
-      const { error: uploadError } = await supabase.storage
-        .from('company-assets')
-        .upload(filePath, file);
+      // First check if bucket exists
+      const { data: buckets } = await supabase
+        .storage
+        .listBuckets();
+
+      const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
+      
+      if (!bucketExists) {
+        // Create the bucket if it doesn't exist
+        const { error: createBucketError } = await supabase
+          .storage
+          .createBucket(bucketName, {
+            public: true,
+            fileSizeLimit: 1024 * 1024 * 2, // 2MB
+            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif']
+          });
+
+        if (createBucketError) {
+          throw new Error('Failed to create storage bucket. Please contact support.');
+        }
+      }
+
+      const { error: uploadError, data } = await supabase.storage
+        .from(bucketName)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('company-assets')
+        .from(bucketName)
         .getPublicUrl(filePath);
 
       return publicUrl;
     } catch (err) {
       console.error('Error uploading logo:', err);
-      throw err;
+      throw new Error(err instanceof Error ? err.message : 'Failed to upload company logo');
     }
   };
 
@@ -128,7 +158,13 @@ export function EmployerProfileForm() {
       let company_logo_url = profile.company_logo_url;
 
       if (logoFile) {
-        company_logo_url = await handleLogoUpload(logoFile);
+        try {
+          company_logo_url = await handleLogoUpload(logoFile);
+        } catch (uploadError) {
+          setError(uploadError instanceof Error ? uploadError.message : 'Failed to upload logo');
+          setLoading(false);
+          return;
+        }
       }
 
       const { error: upsertError } = await supabase
@@ -142,7 +178,9 @@ export function EmployerProfileForm() {
       if (upsertError) throw upsertError;
 
       setSuccess('Profile updated successfully');
-      setTimeout(() => navigate('/employer/dashboard'), 2000);
+      setTimeout(() => {
+        navigate('/employer/dashboard');
+      }, 2000);
     } catch (err) {
       console.error('Error updating profile:', err);
       setError(err instanceof Error ? err.message : 'Failed to update profile');
@@ -153,7 +191,9 @@ export function EmployerProfileForm() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-8">Company Profile</h1>
+      <h1 className="text-2xl font-bold mb-8">
+        {isNewProfile ? 'Create Company Profile' : 'Edit Company Profile'}
+      </h1>
 
       {error && (
         <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4">
@@ -347,3 +387,7 @@ export function EmployerProfileForm() {
     </div>
   );
 }
+
+
+
+

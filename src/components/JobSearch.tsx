@@ -1,5 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Search, Filter, X } from 'lucide-react';
+import { debounce } from 'lodash';
 
 const jobTypes = [
   'Full-time',
@@ -40,6 +41,11 @@ const timeFrames = [
 
 export interface SearchFilters {
   query: string;
+  searchIn: {
+    title: boolean;
+    description: boolean;
+    companyName: boolean;
+  };
   jobType: string[];
   experienceLevel: string;
   salary: [number, number];
@@ -52,6 +58,11 @@ export interface SearchFilters {
 
 const initialFilters: SearchFilters = {
   query: '',
+  searchIn: {
+    title: true,
+    description: true,
+    companyName: true,
+  },
   jobType: [],
   experienceLevel: '',
   salary: [0, 200000],
@@ -62,10 +73,51 @@ const initialFilters: SearchFilters = {
   postedWithin: '',
 };
 
-export function JobSearch({ onSearch }: JobSearchProps) {
+interface JobSearchProps {
+  initialFilters?: SearchFilters;
+  onSearch: (filters: SearchFilters) => void;
+  isLoading?: boolean;
+  className?: string;
+}
+
+export function JobSearch({ 
+  initialFilters = {
+    query: '',
+    searchIn: {
+      title: true,
+      description: true,
+      companyName: true,
+    },
+    jobType: [],
+    experienceLevel: '',
+    salary: [0, 200000],
+    location: '',
+    remote: false,
+    skills: [],
+    industry: '',
+    postedWithin: '',
+  },
+  onSearch,
+  isLoading,
+  className 
+}: JobSearchProps) {
   const [filters, setFilters] = useState<SearchFilters>(initialFilters);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [newSkill, setNewSkill] = useState('');
+  const [advancedSearch, setAdvancedSearch] = useState(false);
+  
+  // Debounce search to prevent too many requests
+  const debouncedSearch = useCallback(
+    debounce((filters: SearchFilters) => {
+      onSearch(filters);
+    }, 300),
+    [onSearch]
+  );
+
+  // Update search when filters change
+  useEffect(() => {
+    debouncedSearch(filters);
+  }, [filters, debouncedSearch]);
 
   const getActiveFiltersCount = useCallback((currentFilters: SearchFilters) => {
     let count = 0;
@@ -78,6 +130,11 @@ export function JobSearch({ onSearch }: JobSearchProps) {
     if (currentFilters.industry) count++;
     if (currentFilters.postedWithin) count++;
     if (currentFilters.salary[0] !== 0 || currentFilters.salary[1] !== 200000) count++;
+    
+    // Count active search fields
+    const searchInCount = Object.values(currentFilters.searchIn).filter(Boolean).length;
+    if (searchInCount < 3 && currentFilters.query.trim()) count++;
+    
     return count;
   }, []);
 
@@ -100,6 +157,16 @@ export function JobSearch({ onSearch }: JobSearchProps) {
 
   const handleFilterChange = (key: keyof SearchFilters, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleSearchInChange = (field: keyof SearchFilters['searchIn']) => {
+    setFilters(prev => ({
+      ...prev,
+      searchIn: {
+        ...prev.searchIn,
+        [field]: !prev.searchIn[field],
+      },
+    }));
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -126,7 +193,7 @@ export function JobSearch({ onSearch }: JobSearchProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <input
@@ -138,28 +205,74 @@ export function JobSearch({ onSearch }: JobSearchProps) {
             onKeyPress={handleKeyPress}
           />
         </div>
-        <button
-          onClick={handleSearch}
-          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-        >
-          Search
-        </button>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsFiltersOpen(!isFiltersOpen);
-          }}
-          className="flex items-center gap-2 px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50"
-        >
-          <Filter className="h-4 w-4" />
-          Filters
-          {getActiveFiltersCount(filters) > 0 && (
-            <span className="ml-1 px-2 py-0.5 text-sm bg-blue-100 text-blue-800 rounded-full">
-              {getActiveFiltersCount(filters)}
-            </span>
-          )}
-        </button>
+        
+        {/* Advanced Search Toggle */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAdvancedSearch(!advancedSearch)}
+            className="text-sm text-blue-600 hover:text-blue-800"
+          >
+            {advancedSearch ? 'Hide Advanced Search' : 'Show Advanced Search'}
+          </button>
+        </div>
+
+        {/* Advanced Search Options */}
+        {advancedSearch && (
+          <div className="flex flex-wrap gap-3 p-3 bg-gray-50 rounded-md">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={filters.searchIn.title}
+                onChange={() => handleSearchInChange('title')}
+                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+              />
+              <span className="text-sm">Search in Title</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={filters.searchIn.description}
+                onChange={() => handleSearchInChange('description')}
+                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+              />
+              <span className="text-sm">Search in Description</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={filters.searchIn.companyName}
+                onChange={() => handleSearchInChange('companyName')}
+                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+              />
+              <span className="text-sm">Search in Company Name</span>
+            </label>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            onClick={handleSearch}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+          >
+            Search
+          </button>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsFiltersOpen(!isFiltersOpen);
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-md border border-gray-300 hover:bg-gray-50"
+          >
+            <Filter className="h-4 w-4" />
+            Filters
+            {getActiveFiltersCount(filters) > 0 && (
+              <span className="ml-1 px-2 py-0.5 text-sm bg-blue-100 text-blue-800 rounded-full">
+                {getActiveFiltersCount(filters)}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {isFiltersOpen && (
@@ -335,6 +448,9 @@ export function JobSearch({ onSearch }: JobSearchProps) {
     </div>
   );
 }
+
+
+
 
 
 

@@ -1,139 +1,207 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { JobPost } from '../types/database';
+import { useState, useEffect } from 'react';
+import { JobSearch } from './JobSearch';
 import { JobPostsList } from './JobPostsList';
 import { JobPostDialog } from './JobPostDialog';
-import { JobSearch } from './JobSearch';
+import { Card } from './ui/card';
+import { Root as Tabs, List as TabsList, Trigger as TabsTrigger, Content as TabsContent } from '@radix-ui/react-tabs';
+import { Badge } from './ui/badge';
+import { Briefcase, BookMarked, Clock, Trophy } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
-import type { SearchFilters } from './JobSearch';
 
 export function JobSeekerDashboard() {
-  const [selectedJob, setSelectedJob] = useState<JobPost | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [jobs, setJobs] = useState<JobPost[]>([]);
   const { user } = useAuth();
-  const isSearching = useRef(false);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [stats, setStats] = useState({
+    applied: 0,
+    saved: 0,
+    pending: 0,
+    interviews: 0,
+    availableJobs: 0
+  });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
-    fetchInitialJobs();
+    fetchDashboardStats();
   }, [user]);
 
-  const fetchInitialJobs = async () => {
-    if (isSearching.current) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('job_posts')
-        .select('*')
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(10);
+  const fetchDashboardStats = async () => {
+    if (!user) return;
 
-      if (error) throw error;
-      setJobs(data || []);
-    } catch (err) {
-      console.error('Error fetching initial jobs:', err);
-      setError('Failed to fetch jobs');
+    try {
+      setLoading(true);
+
+      // Fetch total available active jobs
+      const { count: availableCount } = await supabase
+        .from('job_posts')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
+
+      // Fetch applied jobs count
+      const { count: appliedCount } = await supabase
+        .from('job_applications')
+        .select('*', { count: 'exact', head: true })
+        .eq('job_seeker_id', user.id);
+
+      // Fetch saved jobs count
+      const { count: savedCount } = await supabase
+        .from('saved_jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('job_seeker_id', user.id);
+
+      // Fetch pending applications count
+      const { count: pendingCount } = await supabase
+        .from('job_applications')
+        .select('*', { count: 'exact', head: true })
+        .eq('job_seeker_id', user.id)
+        .eq('status', 'pending');
+
+      // Fetch interview count (applications with status 'interviewing')
+      const { count: interviewCount } = await supabase
+        .from('job_applications')
+        .select('*', { count: 'exact', head: true })
+        .eq('job_seeker_id', user.id)
+        .eq('status', 'interviewing');
+
+      setStats({
+        applied: appliedCount || 0,
+        saved: savedCount || 0,
+        pending: pendingCount || 0,
+        interviews: interviewCount || 0,
+        availableJobs: availableCount || 0
+      });
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = useCallback(async (filters: SearchFilters) => {
-    isSearching.current = true;
-    setLoading(true);
-
-    try {
-      let query = supabase
-        .from('job_posts')
-        .select('*')
-        .eq('status', 'active');
-
-      // Apply filters
-      if (filters.query) {
-        query = query.or(`title.ilike.%${filters.query}%,description.ilike.%${filters.query}%`);
-      }
-
-      if (filters.jobType.length > 0) {
-        query = query.in('job_type', filters.jobType);
-      }
-
-      // Add other filter conditions...
-
-      const { data, error } = await query.order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      setJobs(data || []);
-    } catch (err) {
-      console.error('Search error:', err);
-      setError('Failed to search jobs');
-    } finally {
-      setLoading(false);
-      isSearching.current = false;
-    }
-  }, []);
-
-  const handleJobSelect = useCallback((job: JobPost) => {
+  const handleJobSelect = (job: any) => {
     setSelectedJob(job);
     setDialogOpen(true);
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center text-red-500">
-          <p>{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  console.log('Rendering JobSeekerDashboard');
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Job Seeker Dashboard</h1>
-            <p className="text-gray-600">Browse available jobs and find your next opportunity</p>
-            
-            {/* Search Component */}
-            <div className="mt-6">
-              <JobSearch onSearch={handleSearch} />
+    <div className="space-y-6">
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="p-4">
+          <div className="flex items-center space-x-3">
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <Briefcase className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Applied Jobs</p>
+              <p className="text-2xl font-semibold">{stats.applied}</p>
             </div>
           </div>
+        </Card>
 
-          {/* Job Posts Section */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <JobPostsList onJobSelect={handleJobSelect} />
+        <Card className="p-4">
+          <div className="flex items-center space-x-3">
+            <div className="p-3 bg-green-100 rounded-lg">
+              <BookMarked className="h-6 w-6 text-green-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Saved Jobs</p>
+              <p className="text-2xl font-semibold">{stats.saved}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center space-x-3">
+            <div className="p-3 bg-yellow-100 rounded-lg">
+              <Clock className="h-6 w-6 text-yellow-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Pending</p>
+              <p className="text-2xl font-semibold">{stats.pending}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center space-x-3">
+            <div className="p-3 bg-purple-100 rounded-lg">
+              <Trophy className="h-6 w-6 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Interviews</p>
+              <p className="text-2xl font-semibold">{stats.interviews}</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Main Content */}
+      <Card className="overflow-hidden">
+        <Tabs defaultValue="available" className="w-full">
+          <div className="px-6 pt-6">
+            <TabsList className="w-full justify-start space-x-4 border-b">
+              <TabsTrigger value="available" className="relative">
+                Available Jobs
+                <Badge className="ml-2 bg-blue-100 text-blue-700">
+                  {stats.availableJobs}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="applied" className="relative">
+                Applied
+                <Badge className="ml-2 bg-green-100 text-green-700">
+                  {stats.applied}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="saved" className="relative">
+                Saved
+                <Badge className="ml-2 bg-yellow-100 text-yellow-700">
+                  {stats.saved}
+                </Badge>
+              </TabsTrigger>
+            </TabsList>
           </div>
 
-          {/* Job Details Dialog */}
-          <JobPostDialog
-            job={selectedJob}
-            open={dialogOpen}
-            onOpenChange={setDialogOpen}
-          />
-        </div>
-      </div>
+          <div className="p-6">
+            <JobSearch 
+              className="mb-6"
+              onSearch={(params) => console.log('Search params:', params)} 
+            />
+
+            <TabsContent value="available">
+              <JobPostsList onJobSelect={handleJobSelect} />
+            </TabsContent>
+
+            <TabsContent value="applied">
+              <JobPostsList 
+                onJobSelect={handleJobSelect} 
+                filter="applied"
+                userId={user?.id}
+              />
+            </TabsContent>
+
+            <TabsContent value="saved">
+              <JobPostsList 
+                onJobSelect={handleJobSelect} 
+                filter="saved"
+                userId={user?.id}
+              />
+            </TabsContent>
+          </div>
+        </Tabs>
+      </Card>
+
+      <JobPostDialog
+        job={selectedJob}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
     </div>
   );
 } 
+
+
+
 
 
 

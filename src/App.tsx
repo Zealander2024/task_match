@@ -8,17 +8,22 @@ import { AuthCallback } from './pages/AuthCallback';
 import { SelectRole } from './pages/SelectRole';
 import { CreateProfile } from './pages/CreateProfile';
 import { EmployerDashboard } from './pages/employer/Dashboard';
-import { JobSeekerDashboard } from './components/JobSeekerDashboard';
 import { EditProfile } from './pages/EditProfile';
 import { RoleProtectedRoute } from './components/RoleProtectedRoute';
 import { Toaster } from './components/ui/toaster';
 import { JobSeekerApplicationsView } from './components/JobSeekerApplicationsView';
 import { MessagesPage } from './pages/MessagesPage';
 import { ChatPage } from './pages/ChatPage';
+import { JobSeekerDashboard } from './components/JobSeekerDashboard';
 import { Briefcase, Users, MessageCircle } from 'lucide-react';
 import { ResetPassword } from './pages/ResetPassword';
 import { Welcome } from './pages/Welcome';
 import { testSupabaseConnection } from './services/supabase';
+import { EmployerProfileForm } from './components/EmployerProfileForm';
+import { CandidatesList } from './components/CandidatesList';
+import { EmployerSettings } from './components/EmployerSettings';
+import { Settings } from './components/Settings';
+import { CompanyProfile } from './components/CompanyProfile';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -227,7 +232,7 @@ function App() {
                       allowedRoles={['job_seeker']}
                       fallbackPath="/select-role"
                     >
-                      <JobSeekerDashboard />
+                      <JobSeekerDashboard/>
                     </RoleProtectedRoute>
                   </ProtectedRoute>
                 }
@@ -351,6 +356,27 @@ function App() {
                 path="/reset-password"
                 element={<ResetPassword />}
               />
+              <Route
+                path="/employer/create-profile"
+                element={
+                  <ProtectedRoute>
+                    <EmployerProfileForm />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/employer/company-profile"
+                element={
+                  <ProtectedRoute>
+                    <RoleProtectedRoute
+                      allowedRoles={['employer']}
+                      fallbackPath="/select-role"
+                    >
+                      <CompanyProfile />
+                    </RoleProtectedRoute>
+                  </ProtectedRoute>
+                }
+              />
             </Routes>
             <Toaster />
           </AuthProvider>
@@ -361,6 +387,15 @@ function App() {
 }
 
 export default App;
+
+
+
+
+
+
+
+
+
 
 
 
