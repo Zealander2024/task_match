@@ -5,7 +5,7 @@ import { JobPostDialog } from './JobPostDialog';
 import { Card } from './ui/card';
 import { Root as Tabs, List as TabsList, Trigger as TabsTrigger, Content as TabsContent } from '@radix-ui/react-tabs';
 import { Badge } from './ui/badge';
-import { Briefcase, BookMarked, Clock, Trophy } from 'lucide-react';
+import { Briefcase, BookMarked, Clock, Trophy, Plus } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 
@@ -83,58 +83,77 @@ export function JobSeekerDashboard() {
     setDialogOpen(true);
   };
 
+  // Add quick actions
+  const QuickActions = () => (
+    <div className="flex gap-4 mb-6">
+      <button className="inline-flex items-center px-4 py-2 rounded-md bg-blue-50 text-blue-700">
+        <Plus className="w-4 h-4 mr-2" />
+        Quick Apply
+      </button>
+      {/* More quick actions */}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <Briefcase className="h-6 w-6 text-blue-600" />
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-32 rounded-lg skeleton-loading" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <Briefcase className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Applied Jobs</p>
+                <p className="text-2xl font-semibold">{stats.applied}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-500">Applied Jobs</p>
-              <p className="text-2xl font-semibold">{stats.applied}</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
 
-        <Card className="p-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-3 bg-green-100 rounded-lg">
-              <BookMarked className="h-6 w-6 text-green-600" />
+          <Card className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-green-100 rounded-lg">
+                <BookMarked className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Saved Jobs</p>
+                <p className="text-2xl font-semibold">{stats.saved}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-500">Saved Jobs</p>
-              <p className="text-2xl font-semibold">{stats.saved}</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
 
-        <Card className="p-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-3 bg-yellow-100 rounded-lg">
-              <Clock className="h-6 w-6 text-yellow-600" />
+          <Card className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-yellow-100 rounded-lg">
+                <Clock className="h-6 w-6 text-yellow-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Pending</p>
+                <p className="text-2xl font-semibold">{stats.pending}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-500">Pending</p>
-              <p className="text-2xl font-semibold">{stats.pending}</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
 
-        <Card className="p-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <Trophy className="h-6 w-6 text-purple-600" />
+          <Card className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <Trophy className="h-6 w-6 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Interviews</p>
+                <p className="text-2xl font-semibold">{stats.interviews}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-500">Interviews</p>
-              <p className="text-2xl font-semibold">{stats.interviews}</p>
-            </div>
-          </div>
-        </Card>
-      </div>
+          </Card>
+        </div>
+      )}
 
       {/* Main Content */}
       <Card className="overflow-hidden">
@@ -199,6 +218,8 @@ export function JobSeekerDashboard() {
     </div>
   );
 } 
+
+
 
 
 

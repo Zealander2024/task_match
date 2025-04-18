@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Layout } from './components/Layout';
@@ -12,9 +12,7 @@ import { EditProfile } from './pages/EditProfile';
 import { RoleProtectedRoute } from './components/RoleProtectedRoute';
 import { Toaster } from './components/ui/toaster';
 import { JobSeekerApplicationsView } from './components/JobSeekerApplicationsView';
-import { MessagesPage } from './pages/MessagesPage';
 import { ChatPage } from './pages/ChatPage';
-import { JobSeekerDashboard } from './components/JobSeekerDashboard';
 import { Briefcase, Users, MessageCircle } from 'lucide-react';
 import { ResetPassword } from './pages/ResetPassword';
 import { Welcome } from './pages/Welcome';
@@ -24,6 +22,23 @@ import { CandidatesList } from './components/CandidatesList';
 import { EmployerSettings } from './components/EmployerSettings';
 import { Settings } from './components/Settings';
 import { CompanyProfile } from './components/CompanyProfile';
+import { LoadingSpinner } from './components/LoadingSpinner';
+import { AdminAuthProvider, useAdminAuth } from './context/AdminAuthContext';
+import { AdminLogin } from './pages/admin/AdminLogin';
+import { AdminLayout } from './components/admin/AdminLayout';
+import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { EmployerManagement } from './pages/admin/EmployerManagement';
+import { JobSeekerManagement } from './pages/admin/JobSeekerManagement';
+import { JobPostManagement } from './pages/admin/JobPostManagement';
+import { Reports } from './pages/admin/Reports';
+import { AdminSettings } from './pages/admin/AdminSettings';
+import { AdminProfileManagement } from './pages/admin/AdminProfileManagement';
+import { AdminProfile } from './components/AdminProfile';
+import { ThemeProvider } from './contexts/ThemeContext';
+
+// Implement lazy loading for routes
+const JobSeekerDashboard = lazy(() => import('./components/JobSeekerDashboard').then(module => ({ default: module.JobSeekerDashboard })));
+const MessagesPage = lazy(() => import('./pages/MessagesPage').then(module => ({ default: module.MessagesPage })));
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -172,246 +187,234 @@ function App() {
   
   return (
     <Router>
-      <div className="relative min-h-screen">
-        {/* Animated background */}
-        <div className="fixed inset-0 -z-10">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-indigo-50 animate-gradient-shift"></div>
-          <div className="absolute inset-0 opacity-30">
-            <div className="absolute w-full h-full bg-[radial-gradient(circle_500px_at_50%_50%,#4F46E5,transparent)]"></div>
-          </div>
-          <div className="absolute inset-0">
-            <svg className="opacity-[0.15] w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <path 
-                d="M0,50 Q25,45 50,50 T100,50 L100,100 L0,100 Z" 
-                fill="currentColor" 
-                className="text-blue-600 animate-wave"
-              />
-              <path 
-                d="M0,60 Q25,55 50,60 T100,60 L100,100 L0,100 Z" 
-                fill="currentColor" 
-                className="text-indigo-600 animate-wave [animation-delay:0.2s]"
-              />
-              <path 
-                d="M0,70 Q25,65 50,70 T100,70 L100,100 L0,100 Z" 
-                fill="currentColor" 
-                className="text-purple-600 animate-wave [animation-delay:0.4s]"
-              />
-            </svg>
-          </div>
-        </div>
-
-        {/* Main content */}
-        <div className="relative z-0">
+      <ThemeProvider>
+        <div className="app">
           <AuthProvider>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/signin" element={<SignIn />} />
-              <Route path="/signup" element={<SignUp />} />
-              <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route
-                path="/welcome"
-                element={
-                  <ProtectedRoute>
-                    <Welcome />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/create-profile"
-                element={
-                  <ProtectedRoute>
-                    <CreateProfile />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <RoleProtectedRoute
-                      allowedRoles={['job_seeker']}
-                      fallbackPath="/select-role"
-                    >
-                      <JobSeekerDashboard/>
-                    </RoleProtectedRoute>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/employer/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <RoleProtectedRoute
-                      allowedRoles={['employer']}
-                      fallbackPath="/select-role"
-                    >
-                      <EmployerDashboard />
-                    </RoleProtectedRoute>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/select-role"
-                element={
-                  <ProtectedRoute>
-                    <SelectRole />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/profile/edit"
-                element={
-                  <ProtectedRoute>
-                    <RoleProtectedRoute
-                      allowedRoles={['job_seeker']}
-                      fallbackPath="/select-role"
-                    >
-                      <EditProfile />
-                    </RoleProtectedRoute>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/employer/profile"
-                element={
-                  <ProtectedRoute>
-                    <RoleProtectedRoute
-                      allowedRoles={['employer']}
-                      fallbackPath="/select-role"
-                    >
-                      <div>Employer Profile Page</div>
-                    </RoleProtectedRoute>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/employer/candidates"
-                element={
-                  <ProtectedRoute>
-                    <RoleProtectedRoute
-                      allowedRoles={['employer']}
-                      fallbackPath="/select-role"
-                    >
-                      <div>Candidates Page</div>
-                    </RoleProtectedRoute>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/employer/settings"
-                element={
-                  <ProtectedRoute>
-                    <RoleProtectedRoute
-                      allowedRoles={['employer']}
-                      fallbackPath="/select-role"
-                    >
-                      <div>Employer Settings Page</div>
-                    </RoleProtectedRoute>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/applications"
-                element={
-                  <ProtectedRoute>
-                    <RoleProtectedRoute
-                      allowedRoles={['job_seeker']}
-                      fallbackPath="/select-role"
-                    >
-                      <JobSeekerApplicationsView />
-                    </RoleProtectedRoute>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <RoleProtectedRoute
-                      allowedRoles={['job_seeker']}
-                      fallbackPath="/select-role"
-                    >
-                      <div>Settings Page</div>
-                    </RoleProtectedRoute>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/messages"
-                element={
-                  <ProtectedRoute>
-                    <MessagesPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/messages/:conversationId"
-                element={
-                  <ProtectedRoute>
-                    <ChatPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/reset-password"
-                element={<ResetPassword />}
-              />
-              <Route
-                path="/employer/create-profile"
-                element={
-                  <ProtectedRoute>
-                    <EmployerProfileForm />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/employer/company-profile"
-                element={
-                  <ProtectedRoute>
-                    <RoleProtectedRoute
-                      allowedRoles={['employer']}
-                      fallbackPath="/select-role"
-                    >
-                      <CompanyProfile />
-                    </RoleProtectedRoute>
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-            <Toaster />
+            <AdminAuthProvider>
+              <Suspense fallback={<LoadingSpinner />}>
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/signin" element={<SignIn />} />
+                  <Route path="/signup" element={<SignUp />} />
+                  <Route path="/auth/callback" element={<AuthCallback />} />
+                  <Route
+                    path="/welcome"
+                    element={
+                      <ProtectedRoute>
+                        <Welcome />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/create-profile"
+                    element={
+                      <ProtectedRoute>
+                        <CreateProfile />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <RoleProtectedRoute
+                          allowedRoles={['job_seeker']}
+                          fallbackPath="/select-role"
+                        >
+                          <JobSeekerDashboard/>
+                        </RoleProtectedRoute>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/employer/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <RoleProtectedRoute
+                          allowedRoles={['employer']}
+                          fallbackPath="/select-role"
+                        >
+                          <EmployerDashboard />
+                        </RoleProtectedRoute>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/select-role"
+                    element={
+                      <ProtectedRoute>
+                        <SelectRole />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile/edit"
+                    element={
+                      <ProtectedRoute>
+                        <RoleProtectedRoute
+                          allowedRoles={['job_seeker']}
+                          fallbackPath="/select-role"
+                        >
+                          <EditProfile />
+                        </RoleProtectedRoute>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/employer/profile"
+                    element={
+                      <ProtectedRoute>
+                        <RoleProtectedRoute
+                          allowedRoles={['employer']}
+                          fallbackPath="/select-role"
+                        >
+                          <div>Employer Profile Page</div>
+                        </RoleProtectedRoute>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/employer/candidates"
+                    element={
+                      <ProtectedRoute>
+                        <RoleProtectedRoute
+                          allowedRoles={['employer']}
+                          fallbackPath="/select-role"
+                        >
+                          <div>Candidates Page</div>
+                        </RoleProtectedRoute>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/employer/settings"
+                    element={
+                      <ProtectedRoute>
+                        <RoleProtectedRoute
+                          allowedRoles={['employer']}
+                          fallbackPath="/select-role"
+                        >
+                          <div>Employer Settings Page</div>
+                        </RoleProtectedRoute>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/applications"
+                    element={
+                      <ProtectedRoute>
+                        <RoleProtectedRoute
+                          allowedRoles={['job_seeker']}
+                          fallbackPath="/select-role"
+                        >
+                          <JobSeekerApplicationsView />
+                        </RoleProtectedRoute>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ProtectedRoute>
+                        <RoleProtectedRoute
+                          allowedRoles={['job_seeker']}
+                          fallbackPath="/select-role"
+                        >
+                          <div>Settings Page</div>
+                        </RoleProtectedRoute>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/messages"
+                    element={
+                      <ProtectedRoute>
+                        <MessagesPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/messages/:conversationId"
+                    element={
+                      <ProtectedRoute>
+                        <ChatPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/reset-password"
+                    element={<ResetPassword />}
+                  />
+                  <Route
+                    path="/employer/create-profile"
+                    element={
+                      <ProtectedRoute>
+                        <EmployerProfileForm />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/employer/company-profile"
+                    element={
+                      <ProtectedRoute>
+                        <RoleProtectedRoute
+                          allowedRoles={['employer']}
+                          fallbackPath="/select-role"
+                        >
+                          <CompanyProfile />
+                        </RoleProtectedRoute>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Admin routes */}
+                  <Route path="/admin/login" element={<AdminLogin />} />
+                  <Route
+                    path="/admin/*"
+                    element={
+                      <AdminProtectedRoute>
+                        <AdminLayout>
+                          <Routes>
+                            <Route path="dashboard" element={<AdminDashboard />} />
+                            <Route path="employers" element={<EmployerManagement />} />
+                            <Route path="job-seekers" element={<JobSeekerManagement />} />
+                            <Route path="job-posts" element={<JobPostManagement />} />
+                            <Route path="reports" element={<Reports />} />
+                            <Route path="settings" element={<AdminSettings />} />
+                            <Route path="profile" element={<AdminProfileManagement />} />
+                            {/* Add a redirect for the root admin path */}
+                            <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+                          </Routes>
+                        </AdminLayout>
+                      </AdminProtectedRoute>
+                    }
+                  />
+                </Routes>
+              </Suspense>
+              <Toaster />
+            </AdminAuthProvider>
           </AuthProvider>
         </div>
-      </div>
+      </ThemeProvider>
     </Router>
   );
 }
 
 export default App;
 
+// Add AdminProtectedRoute component
+function AdminProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAdmin, loading } = useAdminAuth();
+  const navigate = useNavigate();
 
+  useEffect(() => {
+    if (!loading && !isAdmin) {
+      navigate('/admin/login');
+    }
+  }, [isAdmin, loading, navigate]);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  if (loading) return <div>Loading...</div>;
+  return isAdmin ? <>{children}</> : null;
+}
 
 
 
