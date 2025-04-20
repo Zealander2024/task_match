@@ -35,6 +35,8 @@ import { AdminSettings } from './pages/admin/AdminSettings';
 import { AdminProfileManagement } from './pages/admin/AdminProfileManagement';
 import { AdminProfile } from './components/AdminProfile';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { CreateFirstAdmin } from './pages/admin/CreateFirstAdmin';
+import { PayPalConfig } from './components/PayPalConfig';
 
 // Implement lazy loading for routes
 const JobSeekerDashboard = lazy(() => import('./components/JobSeekerDashboard').then(module => ({ default: module.JobSeekerDashboard })));
@@ -367,6 +369,7 @@ function App() {
                     }
                   />
                   {/* Admin routes */}
+                  <Route path="/admin/create-first-admin" element={<CreateFirstAdmin />} />
                   <Route path="/admin/login" element={<AdminLogin />} />
                   <Route
                     path="/admin/*"
@@ -415,6 +418,4 @@ function AdminProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <div>Loading...</div>;
   return isAdmin ? <>{children}</> : null;
 }
-
-
 

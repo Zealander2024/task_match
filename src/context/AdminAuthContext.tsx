@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { ADMIN_CREDENTIALS } from '../constants/adminConfig';
 
 interface AdminAuthContextType {
@@ -20,38 +20,64 @@ export function useAdminAuth() {
 
 export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    // Check if admin session exists in localStorage
+  async function adminSignIn(email: string, password: string) {
+    setLoading(true);
+    try {
+      if (email !== ADMIN_CREDENTIALS.email || password !== ADMIN_CREDENTIALS.password) {
+        throw new Error('Invalid admin credentials');
+      }
+      
+      // Store admin session in localStorage
+      localStorage.setItem('adminSession', JSON.stringify({ 
+        email: ADMIN_CREDENTIALS.email,
+        isAdmin: true 
+      }));
+      
+      setIsAdmin(true);
+    } catch (error) {
+      console.error('Admin sign in error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function adminSignOut() {
+    setLoading(true);
+    try {
+      localStorage.removeItem('adminSession');
+      setIsAdmin(false);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Check for existing admin session on mount
+  React.useEffect(() => {
     const adminSession = localStorage.getItem('adminSession');
-    setIsAdmin(!!adminSession);
+    if (adminSession) {
+      const session = JSON.parse(adminSession);
+      setIsAdmin(session.email === ADMIN_CREDENTIALS.email);
+    }
     setLoading(false);
   }, []);
 
-  const adminSignIn = async (email: string, password: string) => {
-    if (
-      email.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase() &&
-      password === ADMIN_CREDENTIALS.password
-    ) {
-      localStorage.setItem('adminSession', 'true');
-      setIsAdmin(true);
-    } else {
-      throw new Error('Invalid admin credentials');
-    }
-  };
-
-  const adminSignOut = async () => {
-    localStorage.removeItem('adminSession');
-    setIsAdmin(false);
+  const value = {
+    isAdmin,
+    loading,
+    adminSignIn,
+    adminSignOut,
   };
 
   return (
-    <AdminAuthContext.Provider value={{ isAdmin, loading, adminSignIn, adminSignOut }}>
+    <AdminAuthContext.Provider value={value}>
       {children}
     </AdminAuthContext.Provider>
   );
 }
+
 
 
 

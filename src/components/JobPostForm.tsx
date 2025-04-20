@@ -777,3 +777,4 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
     </form>
   );
 } 
+

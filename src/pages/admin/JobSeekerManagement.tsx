@@ -49,16 +49,55 @@ export function JobSeekerManagement() {
   async function fetchJobSeekers() {
     try {
       console.log('Fetching job seekers...');
-      const { data, error } = await supabase
+      const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+          id,
+          full_name,
+          role,
+          bio,
+          work_email,
+          years_of_experience,
+          skills,
+          avatar_url,
+          resume_url,
+          portfolio_images,
+          created_at,
+          updated_at
+        `)
         .eq('role', 'job_seeker')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      
-      console.log('Fetched data:', data);
-      setJobSeekers(data || []);
+      if (profilesError) {
+        throw profilesError;
+      }
+
+      if (!profilesData || profilesData.length === 0) {
+        // If no job seekers exist, create a test job seeker
+        const testJobSeeker = {
+          full_name: 'Test Job Seeker',
+          role: 'job_seeker',
+          bio: 'This is a test job seeker account',
+          work_email: 'testjobseeker@example.com',
+          years_of_experience: 5,
+          skills: ['JavaScript', 'React', 'Node.js'],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: insertedData, error: insertError } = await supabase
+          .from('profiles')
+          .insert([testJobSeeker])
+          .select();
+
+        if (insertError) throw insertError;
+
+        setJobSeekers(insertedData || []);
+        console.log('Created test job seeker:', insertedData);
+      } else {
+        setJobSeekers(profilesData);
+        console.log('Fetched job seekers:', profilesData);
+      }
     } catch (error) {
       console.error('Error fetching job seekers:', error);
       toast({
@@ -358,6 +397,7 @@ export function JobSeekerManagement() {
     </div>
   );
 }
+
 
 
 

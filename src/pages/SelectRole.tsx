@@ -46,8 +46,16 @@ export function SelectRole() {
           throw profileError;
         }
 
-        if (profile?.role && !isChangingRole) {
-          setCurrentRole(profile.role);
+        if (profile?.role) {
+          // Handle admin role differently
+          if (profile.role === 'admin') {
+            navigate('/admin/dashboard');
+            return;
+          }
+          
+          if (!isChangingRole) {
+            setCurrentRole(profile.role as 'employer' | 'job_seeker');
+          }
         }
       } catch (err) {
         console.error('Error checking role:', err);
@@ -65,6 +73,13 @@ export function SelectRole() {
       setLoading(true);
       setError('');
 
+      // First, check if profile exists
+      const { data: existingProfile, error: checkError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+
       const profile: Profile = {
         id: user.id,
         role: role,
@@ -74,9 +89,24 @@ export function SelectRole() {
         updated_at: new Date().toISOString()
       };
 
-      const { error: upsertError } = await supabase
-        .from('profiles')
-        .upsert(profile);
+      let upsertError;
+      if (!existingProfile) {
+        // Insert new profile
+        const { error } = await supabase
+          .from('profiles')
+          .insert([profile]);
+        upsertError = error;
+      } else {
+        // Update existing profile
+        const { error } = await supabase
+          .from('profiles')
+          .update({ 
+            role: role,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id);
+        upsertError = error;
+      }
 
       if (upsertError) throw upsertError;
 
@@ -229,5 +259,8 @@ export function SelectRole() {
     </div>
   );
 }
+
+
+
 
 

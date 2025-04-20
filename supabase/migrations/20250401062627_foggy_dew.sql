@@ -78,9 +78,16 @@ ERROR:  42P07: relation "job_posts" already exists/*
 -- Create profiles table
 CREATE TABLE IF NOT EXISTS profiles (
   id uuid PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
-  role text NOT NULL CHECK (role IN ('admin', 'employer', 'job_seeker')),
-  full_name text NOT NULL,
+  role text CHECK (role IN ('freelancer', 'client')),
+  email text,
+  full_name text,
   avatar_url text,
+  bio text,
+  work_email text,
+  years_of_experience integer,
+  skills text[],
+  portfolio_images jsonb[],
+  resume_url text,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -323,3 +330,5 @@ CREATE TRIGGER update_job_posts_updated_at
   BEFORE UPDATE ON job_posts
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+

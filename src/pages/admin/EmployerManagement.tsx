@@ -45,16 +45,54 @@ export function EmployerManagement() {
 
   async function fetchEmployers() {
     try {
-      const { data, error } = await supabase
+      const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+          id,
+          full_name,
+          role,
+          bio,
+          work_email,
+          years_of_experience,
+          skills,
+          avatar_url,
+          resume_url,
+          created_at,
+          updated_at
+        `)
         .eq('role', 'employer')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      
-      console.log('Fetched employers:', data);
-      setEmployers(data || []);
+      if (profilesError) {
+        throw profilesError;
+      }
+
+      if (!profilesData || profilesData.length === 0) {
+        // If no employers exist, create a test employer
+        const testEmployer = {
+          full_name: 'Test Employer',
+          role: 'employer',
+          bio: 'This is a test employer account',
+          work_email: 'testemployer@example.com',
+          years_of_experience: 10,
+          skills: ['Hiring', 'Management', 'HR'],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: insertedData, error: insertError } = await supabase
+          .from('profiles')
+          .insert([testEmployer])
+          .select();
+
+        if (insertError) throw insertError;
+
+        setEmployers(insertedData || []);
+        console.log('Created test employer:', insertedData);
+      } else {
+        setEmployers(profilesData);
+        console.log('Fetched employers:', profilesData);
+      }
     } catch (error) {
       console.error('Error fetching employers:', error);
       toast({
@@ -71,22 +109,17 @@ export function EmployerManagement() {
     if (!window.confirm('Are you sure you want to delete this employer?')) return;
 
     try {
-      // First, delete the auth user
-      const { error: authError } = await supabase.rpc('delete_user', {
-        user_id: employerId
-      });
-
-      if (authError) throw authError;
-
-      // Then, delete the profile
+      // First delete the profile
       const { error: profileError } = await supabase
         .from('profiles')
         .delete()
         .eq('id', employerId);
 
       if (profileError) throw profileError;
+
+      // Update the local state
+      setEmployers(prev => prev.filter(emp => emp.id !== employerId));
       
-      setEmployers(employers.filter(emp => emp.id !== employerId));
       toast({
         title: "Success",
         description: "Employer deleted successfully"
@@ -95,7 +128,7 @@ export function EmployerManagement() {
       console.error('Error deleting employer:', error);
       toast({
         title: "Error",
-        description: "Failed to delete employer. Make sure you have admin privileges.",
+        description: "Failed to delete employer",
         variant: "destructive"
       });
     }
@@ -379,6 +412,7 @@ export function EmployerManagement() {
     </div>
   );
 }
+
 
 
 

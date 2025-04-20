@@ -9,7 +9,7 @@ import {
 import { useToast } from "./use-toast"
 
 export function Toaster() {
-  const { toasts } = useToast()
+  const { toasts = [] } = useToast()
 
   return (
     <ToastProvider>

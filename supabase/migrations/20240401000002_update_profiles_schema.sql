@@ -1,8 +1,14 @@
--- Update profiles table schema
-CREATE TABLE IF NOT EXISTS public.profiles (
+-- Drop existing triggers if any
+DROP TRIGGER IF EXISTS calculate_profile_percentage_trigger ON profiles;
+DROP FUNCTION IF EXISTS calculate_profile_percentage();
+
+-- Drop and recreate the profiles table
+DROP TABLE IF EXISTS profiles CASCADE;
+
+CREATE TABLE profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name TEXT,
-    role TEXT,
+    role TEXT CHECK (role IN ('employer', 'job_seeker')),
     bio TEXT,
     work_email TEXT,
     years_of_experience INTEGER,
@@ -13,21 +19,18 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Drop existing RLS policies if they exist
-DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
-DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+-- Enable RLS
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
--- Create new RLS policies
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-
+-- Create policies
 CREATE POLICY "Users can view their own profile"
-    ON public.profiles FOR SELECT
+    ON profiles FOR SELECT
     USING (auth.uid() = id);
 
 CREATE POLICY "Users can update their own profile"
-    ON public.profiles FOR UPDATE
+    ON profiles FOR UPDATE
     USING (auth.uid() = id);
 
 CREATE POLICY "Users can insert their own profile"
-    ON public.profiles FOR INSERT
+    ON profiles FOR INSERT
     WITH CHECK (auth.uid() = id);

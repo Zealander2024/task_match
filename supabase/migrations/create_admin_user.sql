@@ -47,3 +47,4 @@ SELECT
 FROM auth.users
 WHERE email = 'admin@tamaskmah.com'
 ON CONFLICT (id) DO NOTHING;
+

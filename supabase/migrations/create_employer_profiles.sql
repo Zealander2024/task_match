@@ -1,4 +1,4 @@
-create table public.employer_profiles (
+create table public.profiles (
     id uuid references auth.users on delete cascade primary key,
     company_name text not null,
     company_website text,
@@ -18,17 +18,35 @@ create table public.employer_profiles (
 );
 
 -- Set up Row Level Security (RLS)
-alter table public.employer_profiles enable row level security;
+alter table public.profiles enable row level security;
 
--- Create policies
-create policy "Users can view their own employer profile"
-    on public.employer_profiles for select
-    using (auth.uid() = id);
+-- Drop existing policies
+DROP POLICY IF EXISTS "Users can view their own employer profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update their own employer profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert their own employer profile" ON public.profiles;
 
-create policy "Users can update their own employer profile"
-    on public.employer_profiles for update
-    using (auth.uid() = id);
+-- Create new policies that include admin access
+CREATE POLICY "Admins can view all profiles"
+    ON public.profiles FOR SELECT
+    USING (
+        auth.jwt() ->> 'role' = 'admin' OR
+        auth.uid() = id
+    );
 
-create policy "Users can insert their own employer profile"
-    on public.employer_profiles for insert
-    with check (auth.uid() = id);
+CREATE POLICY "Admins can update all profiles"
+    ON public.profiles FOR UPDATE
+    USING (
+        auth.jwt() ->> 'role' = 'admin' OR
+        auth.uid() = id
+    );
+
+CREATE POLICY "Admins can delete all profiles"
+    ON public.profiles FOR DELETE
+    USING (auth.jwt() ->> 'role' = 'admin');
+
+CREATE POLICY "Admins can insert profiles"
+    ON public.profiles FOR INSERT
+    WITH CHECK (
+        auth.jwt() ->> 'role' = 'admin' OR
+        auth.uid() = id
+    );

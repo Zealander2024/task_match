@@ -5,9 +5,11 @@ import { useAuth } from '../context/AuthContext';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Root as Tabs, List as TabsList, Trigger as TabsTrigger, Content as TabsContent } from '@radix-ui/react-tabs';
 import { formatDistanceToNow } from 'date-fns';
 import { Download, Eye, Mail, Phone } from 'lucide-react';
+import { EmployerPayment } from './EmployerPayment';
+import * as Dialog from '@radix-ui/react-dialog';
 
 interface Application {
   id: string;
@@ -41,6 +43,8 @@ export function EmployerApplicationsView({ jobId }: { jobId?: string }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalApplications, setTotalApplications] = useState(0);
   const itemsPerPage = 10;
+  const [showPayment, setShowPayment] = useState(false);
+  const [selectedApplication, setSelectedApplication] = useState<any>(null);
 
   const fetchApplications = async () => {
     try {
@@ -176,6 +180,14 @@ export function EmployerApplicationsView({ jobId }: { jobId?: string }) {
     } catch (err) {
       console.error('Error updating application status:', err);
     }
+  };
+
+  const handlePaymentSuccess = async () => {
+    // Update application status
+    await updateApplicationStatus(selectedApplication.id, 'paid', selectedApplication.job_seeker_id);
+    setShowPayment(false);
+    // Refresh applications list
+    fetchApplications();
   };
 
   const filteredApplications = activeTab === 'all' 
@@ -337,6 +349,17 @@ export function EmployerApplicationsView({ jobId }: { jobId?: string }) {
                     Accept
                   </Button>
                 )}
+                {app.status === 'accepted' && (
+                  <button
+                    onClick={() => {
+                      setSelectedApplication(app);
+                      setShowPayment(true);
+                    }}
+                    className="bg-green-500 text-white px-4 py-2 rounded-md"
+                  >
+                    Process Payment
+                  </button>
+                )}
               </CardFooter>
             </Card>
           ))}
@@ -349,6 +372,21 @@ export function EmployerApplicationsView({ jobId }: { jobId?: string }) {
         itemsPerPage={itemsPerPage}
         totalItems={totalApplications}
       />
+      {showPayment && selectedApplication && (
+        <Dialog.Root open={showPayment} onOpenChange={setShowPayment}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 bg-black/50" />
+            <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg p-6 w-full max-w-lg">
+              <EmployerPayment
+                jobApplicationId={selectedApplication.id}
+                jobseekerId={selectedApplication.job_seeker_id}
+                amount={selectedApplication.job_posts.budget}
+                onSuccess={handlePaymentSuccess}
+              />
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
     </div>
   );
 }

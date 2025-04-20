@@ -18,6 +18,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Badge } from "../components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Separator } from "../components/ui/separator";
+import { JobSeekerPayPalSetup } from '../components/JobSeekerPayPalSetup';
 
 interface Profile {
   id: string;
@@ -337,6 +338,18 @@ export function EditProfile() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle>Payment Settings</CardTitle>
+            <CardDescription>
+              Set up your PayPal account to receive payments
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <JobSeekerPayPalSetup />
+          </CardContent>
+        </Card>
+
         <div className="flex justify-end gap-4">
           <Button
             type="button"
@@ -364,6 +377,7 @@ export function EditProfile() {
     </div>
   );
 } 
+
 
 
 
