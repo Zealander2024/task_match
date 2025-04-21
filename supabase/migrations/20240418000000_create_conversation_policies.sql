@@ -2,6 +2,14 @@
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can create conversations" ON conversations;
+DROP POLICY IF EXISTS "Users can view their own conversations" ON conversations;
+DROP POLICY IF EXISTS "Users can update their own conversations" ON conversations;
+DROP POLICY IF EXISTS "Users can create messages in their conversations" ON messages;
+DROP POLICY IF EXISTS "Users can view messages in their conversations" ON messages;
+DROP POLICY IF EXISTS "Users can update their own messages" ON messages;
+
 -- Conversations policies
 CREATE POLICY "Users can create conversations"
     ON conversations FOR INSERT

@@ -192,7 +192,7 @@ export function EmployerProfileForm() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-8">
-        {isNewProfile ? 'Create Company Profile' : 'Edit Company Profile'}
+        {isNewProfile ? 'Create  Profile' : 'Edit Company Profile'}
       </h1>
 
       {error && (
@@ -214,7 +214,7 @@ export function EmployerProfileForm() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Company Name *
+              Full name *
             </label>
             <input
               type="text"
@@ -227,7 +227,7 @@ export function EmployerProfileForm() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Company Website *
+              Your Website link Optional *
             </label>
             <input
               type="url"
@@ -278,7 +278,7 @@ export function EmployerProfileForm() {
 
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700">
-              Company Description *
+               Description *
             </label>
             <textarea
               required
@@ -318,10 +318,10 @@ export function EmployerProfileForm() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Company Logo
+               Logo
             </label>
             <div className="mt-1 flex items-center">
-              {profile.company_logo_url && (
+              {profile.logo_url && (
                 <img
                   src={profile.company_logo_url}
                   alt="Company logo"

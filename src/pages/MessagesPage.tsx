@@ -265,13 +265,24 @@ export function MessagesPage({ selectedConversationId }: MessagesPageProps) {
     if (!newMessage.trim() || !selectedConversation || !user) return;
 
     try {
+      // Get the conversation to determine the recipient
+      const conversation = conversations.find(c => c.id === selectedConversation);
+      if (!conversation) return;
+
+      // Determine recipient_id (the other user in the conversation)
+      const recipient_id = conversation.user1_id === user.id 
+        ? conversation.user2_id 
+        : conversation.user1_id;
+
       // Insert the message
       const { error: messageError } = await supabase
         .from('messages')
         .insert({
           conversation_id: selectedConversation,
           sender_id: user.id,
-          content: newMessage.trim()
+          recipient_id: recipient_id, // Add this field
+          content: newMessage.trim(),
+          read: false // Add this field to track message read status
         });
 
       if (messageError) throw messageError;

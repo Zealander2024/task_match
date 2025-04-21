@@ -494,11 +494,3 @@ export function UsersSidebar({ onClose }: UsersSidebarProps) {
     </div>
   );
 }
-
-
-
-
-
-
-
-
