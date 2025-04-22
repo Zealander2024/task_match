@@ -89,7 +89,7 @@ export function JobSeekerProfile() {
                   to="/profile/edit"
                   className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
                 >
-                  Edit Profile
+                  Edit Profil
                 </Link>
               </div>
             </div>

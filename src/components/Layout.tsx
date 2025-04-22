@@ -100,7 +100,7 @@ export function Layout({ children }: LayoutProps) {
 
   const employerNavigation = [
     { name: 'Dashboard', href: '/employer/dashboard', icon: Home },
-    { name: 'Company Profile', href: '/employer/company-profile', icon: Building2 }, // Make sure this matches exactly
+    { name: 'Profile', href: '/employer/company-profile', icon: Building2 }, // Make sure this matches exactly
     { name: 'Candidates', href: '/employer/candidates', icon: Users },
     { name: 'Settings', href: '/employer/settings', icon: Settings },
   ];

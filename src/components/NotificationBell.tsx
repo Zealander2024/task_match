@@ -46,138 +46,35 @@ export function NotificationBell() {
   const [applicationDetails, setApplicationDetails] = useState<Record<string, ApplicationDetails>>({});
   const [isEmployer, setIsEmployer] = useState(false);
   const [employerJobPosts, setEmployerJobPosts] = useState<string[]>([]);
-  const navigate = useNavigate();
 
-  useEffect(() => {
+  const fetchNotifications = async () => {
     if (!user) return;
 
-    // Check if user is an employer and get their job posts
-    const checkUserRoleAndJobs = async () => {
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (!profileError && profileData) {
-        const isEmployerRole = profileData.role === 'employer';
-        setIsEmployer(isEmployerRole);
-        
-        // If employer, fetch their job posts
-        if (isEmployerRole) {
-          const { data: jobsData, error: jobsError } = await supabase
-            .from('job_posts')
-            .select('id')
-            .eq('employer_id', user.id);
-            
-          if (!jobsError && jobsData) {
-            const jobIds = jobsData.map(job => job.id);
-            setEmployerJobPosts(jobIds);
-            
-            // Fetch all applications for these job posts
-            if (jobIds.length > 0) {
-              const { data: applicationsData, error: applicationsError } = await supabase
-                .from('job_applications')
-                .select(`
-                  id,
-                  job_post_id,
-                  job_seeker_id,
-                  email,
-                  contact_number,
-                  status,
-                  created_at,
-                  resume_url,
-                  job_posts:job_post_id (title)
-                `)
-                .in('job_post_id', jobIds)
-                .order('created_at', { ascending: false });
-                
-              if (!applicationsError && applicationsData) {
-                // Create notifications for each application if they don't exist
-                for (const app of applicationsData) {
-                  // Get job seeker details
-                  const { data: seekerData } = await supabase
-                    .from('profiles')
-                    .select('full_name')
-                    .eq('id', app.job_seeker_id)
-                    .single();
-                    
-                  const applicantName = seekerData?.full_name || 'A candidate';
-                  const jobTitle = app.job_posts?.title || 'your job post';
-                  
-                  // Check if notification already exists
-                  const { data: existingNotification } = await supabase
-                    .from('notifications')
-                    .select('id')
-                    .eq('user_id', user.id)
-                    .eq('type', 'new_application')
-                    .eq('metadata->application_id', app.id)
-                    .single();
-                    
-                  if (!existingNotification) {
-                    // Create notification
-                    await supabase
-                      .from('notifications')
-                      .insert({
-                        user_id: user.id,
-                        type: 'new_application',
-                        message: `${applicantName} applied for ${jobTitle}`,
-                        metadata: {
-                          job_post_id: app.job_post_id,
-                          application_id: app.id,
-                          applicant_id: app.job_seeker_id
-                        },
-                        read: false,
-                        created_at: app.created_at
-                      });
-                  }
-                  
-                  // Add to application details
-                  setApplicationDetails(prev => ({
-                    ...prev,
-                    [app.id]: {
-                      id: app.id,
-                      job_title: app.job_posts?.title || 'Unknown Job',
-                      applicant_name: applicantName,
-                      applicant_email: app.email || 'No email provided',
-                      contact_number: app.contact_number || 'No contact number',
-                      status: app.status,
-                      created_at: app.created_at,
-                      resume_url: app.resume_url
-                    }
-                  }));
-                }
-              }
-            }
-          }
-        }
-      }
-    };
-
-    checkUserRoleAndJobs();
-
-    const fetchNotifications = async () => {
-      const { data, error } = await supabase
+    try {
+      // Fetch notifications
+      const { data: notificationsData, error: notificationsError } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching notifications:', error);
-        return;
-      }
+      if (notificationsError) throw notificationsError;
 
-      setNotifications(data || []);
-      setUnreadCount(data?.filter(n => !n.read).length || 0);
+      // Update notifications state
+      setNotifications(notificationsData || []);
+      setUnreadCount(notificationsData?.filter(n => !n.read).length || 0);
 
-      // Fetch additional details for application notifications
-      const applicationIds = data
-        ?.filter(n => n.type === 'new_application' && n.metadata?.application_id)
-        .map(n => n.metadata.application_id) || [];
+      // Fetch application details for application-related notifications
+      const applicationIds = notificationsData
+        ?.filter(n => 
+          n.type === 'new_application' && 
+          n.metadata && 
+          'application_id' in n.metadata
+        )
+        .map(n => n.metadata.application_id);
 
-      if (applicationIds.length > 0) {
-        const { data: applications, error: appError } = await supabase
+      if (applicationIds?.length) {
+        const { data: applications, error: applicationsError } = await supabase
           .from('job_applications')
           .select(`
             id,
@@ -187,33 +84,44 @@ export function NotificationBell() {
             status,
             created_at,
             resume_url,
-            job_posts:job_post_id (title),
-            job_seekers:job_seeker_id (user_metadata)
+            job_posts:job_post_id (
+              title
+            ),
+            profiles:job_seeker_id (
+              full_name,
+              avatar_url
+            )
           `)
           .in('id', applicationIds);
 
-        if (!appError && applications) {
-          const details: Record<string, ApplicationDetails> = {};
-          applications.forEach(app => {
-            details[app.id] = {
-              id: app.id,
-              job_title: app.job_posts?.title || 'Unknown Job',
-              applicant_name: app.job_seekers?.user_metadata?.full_name || 'Unknown Applicant',
-              applicant_email: app.email || app.job_seekers?.user_metadata?.email || 'No email provided',
-              contact_number: app.contact_number || 'No contact number',
-              status: app.status,
-              created_at: app.created_at,
-              resume_url: app.resume_url
-            };
-          });
-          setApplicationDetails(details);
-        }
+        if (applicationsError) throw applicationsError;
+
+        // Update application details state
+        const details: Record<string, ApplicationDetails> = {};
+        applications?.forEach(app => {
+          details[app.id] = {
+            id: app.id,
+            job_title: app.job_posts?.title || 'Unknown Job',
+            applicant_name: app.profiles?.full_name || 'Unknown Applicant',
+            applicant_email: app.email || 'No email provided',
+            contact_number: app.contact_number || 'No contact number',
+            status: app.status,
+            created_at: app.created_at,
+            resume_url: app.resume_url,
+            applicant_avatar: app.profiles?.avatar_url
+          };
+        });
+        setApplicationDetails(details);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  };
 
-    fetchNotifications();
+  // Set up real-time subscription for new notifications
+  useEffect(() => {
+    if (!user) return;
 
-    // Set up realtime subscription for notifications
     const notificationSubscription = supabase
       .channel('notifications-changes')
       .on(
@@ -229,8 +137,11 @@ export function NotificationBell() {
           setNotifications(prev => [newNotification, ...prev]);
           setUnreadCount(prev => prev + 1);
 
-          // Fetch additional details if it's an application notification
-          if (newNotification.type === 'new_application' && newNotification.metadata?.application_id) {
+          // Fetch application details if needed
+          if (
+            newNotification.type === 'new_application' && 
+            newNotification.metadata?.application_id
+          ) {
             const { data, error } = await supabase
               .from('job_applications')
               .select(`
@@ -242,7 +153,7 @@ export function NotificationBell() {
                 created_at,
                 resume_url,
                 job_posts:job_post_id (title),
-                job_seekers:job_seeker_id (user_metadata)
+                profiles:job_seeker_id (full_name, avatar_url)
               `)
               .eq('id', newNotification.metadata.application_id)
               .single();
@@ -253,12 +164,13 @@ export function NotificationBell() {
                 [data.id]: {
                   id: data.id,
                   job_title: data.job_posts?.title || 'Unknown Job',
-                  applicant_name: data.job_seekers?.user_metadata?.full_name || 'Unknown Applicant',
-                  applicant_email: data.email || data.job_seekers?.user_metadata?.email || 'No email provided',
+                  applicant_name: data.profiles?.full_name || 'Unknown Applicant',
+                  applicant_email: data.email || 'No email provided',
                   contact_number: data.contact_number || 'No contact number',
                   status: data.status,
                   created_at: data.created_at,
-                  resume_url: data.resume_url
+                  resume_url: data.resume_url,
+                  applicant_avatar: data.profiles?.avatar_url
                 }
               }));
             }
@@ -267,99 +179,33 @@ export function NotificationBell() {
       )
       .subscribe();
 
-    // Set up realtime subscription for job applications (for employers)
-    let applicationSubscription: any = null;
-    
-    if (isEmployer) {
-      applicationSubscription = supabase
-        .channel('job-applications-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*', // Listen for all events (INSERT, UPDATE, DELETE)
-            schema: 'public',
-            table: 'job_applications'
-          },
-          async (payload) => {
-            // Only process if this is for one of the employer's job posts
-            if (payload.new && employerJobPosts.includes(payload.new.job_post_id)) {
-              const newApplication = payload.new as any;
-              
-              // Get job details
-              const { data: jobData } = await supabase
-                .from('job_posts')
-                .select('title')
-                .eq('id', newApplication.job_post_id)
-                .single();
-                
-              // Get job seeker details
-              const { data: userData } = await supabase
-                .from('profiles')
-                .select('full_name')
-                .eq('id', newApplication.job_seeker_id)
-                .single();
-                
-              const jobTitle = jobData?.title || 'your job post';
-              const applicantName = userData?.full_name || 'A candidate';
-              
-              if (payload.eventType === 'INSERT') {
-                // Create a notification for this new application
-                const notificationMessage = `${applicantName} applied for ${jobTitle}`;
-                
-                // Insert notification
-                await supabase
-                  .from('notifications')
-                  .insert({
-                    user_id: user.id,
-                    type: 'new_application',
-                    message: notificationMessage,
-                    metadata: {
-                      job_post_id: newApplication.job_post_id,
-                      application_id: newApplication.id,
-                      applicant_id: newApplication.job_seeker_id
-                    },
-                    read: false
-                  });
-                  
-                // Update application details
-                setApplicationDetails(prev => ({
-                  ...prev,
-                  [newApplication.id]: {
-                    id: newApplication.id,
-                    job_title: jobTitle,
-                    applicant_name: applicantName,
-                    applicant_email: newApplication.email || 'No email provided',
-                    contact_number: newApplication.contact_number || 'No contact number',
-                    status: newApplication.status,
-                    created_at: newApplication.created_at,
-                    resume_url: newApplication.resume_url
-                  }
-                }));
-              }
-            }
-          }
-        )
-        .subscribe();
-    }
+    // Initial fetch
+    fetchNotifications();
 
     return () => {
       supabase.removeChannel(notificationSubscription);
-      if (applicationSubscription) {
-        supabase.removeChannel(applicationSubscription);
-      }
     };
-  }, [user, isEmployer]);
+  }, [user]);
 
-  const markAsRead = async (id: string) => {
-    await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('id', id);
-    
-    setNotifications(prev => 
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
-    setUnreadCount(prev => Math.max(0, prev - 1));
+  // Mark notification as read
+  const markAsRead = async (notificationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('id', notificationId);
+
+      if (error) throw error;
+
+      setNotifications(prev =>
+        prev.map(n =>
+          n.id === notificationId ? { ...n, read: true } : n
+        )
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
   const markAllAsRead = async () => {

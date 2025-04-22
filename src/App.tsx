@@ -19,7 +19,7 @@ import { Welcome } from './pages/Welcome';
 import { testSupabaseConnection } from './services/supabase';
 import { EmployerProfileForm } from './components/EmployerProfileForm';
 import { CandidatesList } from './components/CandidatesList';
-import { EmployerSettings } from './components/EmployerSettings';
+import { EmployerSettings } from './pages/employer/EmployerSettings';
 import { Settings } from './components/Settings';
 import { CompanyProfile } from './components/CompanyProfile';
 import { LoadingSpinner } from './components/LoadingSpinner';
@@ -37,6 +37,7 @@ import { AdminProfile } from './components/AdminProfile';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { CreateFirstAdmin } from './pages/admin/CreateFirstAdmin';
 import { PayPalConfig } from './components/PayPalConfig';
+import { EmployerCandidatesPage } from './pages/employer/CandidatesPage';
 
 // Implement lazy loading for routes
 const JobSeekerDashboard = lazy(() => import('./components/JobSeekerDashboard').then(module => ({ default: module.JobSeekerDashboard })));
@@ -283,7 +284,7 @@ function App() {
                           allowedRoles={['employer']}
                           fallbackPath="/select-role"
                         >
-                          <div>Candidates Page</div>
+                          <EmployerCandidatesPage />
                         </RoleProtectedRoute>
                       </ProtectedRoute>
                     }
@@ -296,7 +297,7 @@ function App() {
                           allowedRoles={['employer']}
                           fallbackPath="/select-role"
                         >
-                          <div>Employer Settings Page</div>
+                          <EmployerSettings/>
                         </RoleProtectedRoute>
                       </ProtectedRoute>
                     }
@@ -418,4 +419,8 @@ function AdminProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <div>Loading...</div>;
   return isAdmin ? <>{children}</> : null;
 }
+
+
+
+
 

@@ -102,40 +102,24 @@ export function EmployerProfileForm() {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user?.id}-${Math.random()}.${fileExt}`;
-      const filePath = `company-logos/${fileName}`;
-      const bucketName = 'company-assets';
+      const filePath = `logos/${fileName}`; // Store in a logos subfolder
+      const bucketName = 'company-assets'; // Use existing bucket
 
-      // First check if bucket exists
-      const { data: buckets } = await supabase
-        .storage
-        .listBuckets();
-
-      const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
-      
-      if (!bucketExists) {
-        // Create the bucket if it doesn't exist
-        const { error: createBucketError } = await supabase
-          .storage
-          .createBucket(bucketName, {
-            public: true,
-            fileSizeLimit: 1024 * 1024 * 2, // 2MB
-            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif']
-          });
-
-        if (createBucketError) {
-          throw new Error('Failed to create storage bucket. Please contact support.');
-        }
-      }
-
+      // Upload file to the company-assets bucket
       const { error: uploadError, data } = await supabase.storage
         .from(bucketName)
         .upload(filePath, file, {
           cacheControl: '3600',
-          upsert: false
+          upsert: true,
+          contentType: file.type
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw new Error('Failed to upload company logo');
+      }
 
+      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from(bucketName)
         .getPublicUrl(filePath);
@@ -318,10 +302,10 @@ export function EmployerProfileForm() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-               Logo
+               Profile
             </label>
             <div className="mt-1 flex items-center">
-              {profile.logo_url && (
+              {profile.company_logo_url && (
                 <img
                   src={profile.company_logo_url}
                   alt="Company logo"
@@ -334,7 +318,7 @@ export function EmployerProfileForm() {
                 <input
                   type="file"
                   className="hidden"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/gif"
                   onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
                 />
               </label>
@@ -387,6 +371,9 @@ export function EmployerProfileForm() {
     </div>
   );
 }
+
+
+
 
 
 

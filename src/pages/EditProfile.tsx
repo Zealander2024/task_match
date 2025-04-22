@@ -19,6 +19,7 @@ import { Badge } from "../components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Separator } from "../components/ui/separator";
 import { JobSeekerPayPalSetup } from '../components/JobSeekerPayPalSetup';
+import { UserVerification } from '../components/UserVerification';
 
 interface Profile {
   id: string;
@@ -372,11 +373,15 @@ export function EditProfile() {
               'Save Changes'
             )}
           </Button>
+          <div className="mt-8">
+  <UserVerification />
+</div>
         </div>
       </form>
     </div>
   );
 } 
+
 
 
 
