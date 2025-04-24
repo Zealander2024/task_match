@@ -11,7 +11,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "clean": "rm -rf dist node_modules/.vite"
+    "clean": "if exist dist rd /s /q dist && if exist node_modules\\.vite rd /s /q node_modules\\.vite"
   },
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",
@@ -72,6 +72,7 @@
     "vite": "^5.0.0"
   }
 }
+
 
 
 

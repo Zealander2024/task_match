@@ -28,21 +28,22 @@ export default defineConfig({
   build: {
     target: 'es2020',
     rollupOptions: {
-      external: ['emoji-mart'],
       output: {
         manualChunks: {
           'supabase': ['@supabase/supabase-js'],
-          'emoji-mart': ['@emoji-mart/react', '@emoji-mart/data', 'emoji-mart'],
           'vendor': [
             'react',
             'react-dom',
-            'react-router-dom'
+            'react-router-dom',
+            '@emoji-mart/react',
+            '@emoji-mart/data'
           ]
         }
       }
     }
   }
 })
+
 
 
 
