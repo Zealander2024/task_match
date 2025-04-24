@@ -8,13 +8,22 @@ export default defineConfig({
   },
   build: {
     commonjsOptions: {
-      include: [/pdfjs-dist/]
+      include: [/pdfjs-dist/],
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'pdf-vendor': ['pdfjs-dist']
+        }
+      }
     }
   },
   worker: {
     format: 'es'
   }
 })
+
 
 
 
