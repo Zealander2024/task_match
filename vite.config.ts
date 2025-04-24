@@ -16,7 +16,10 @@ export default defineConfig({
     include: [
       '@supabase/supabase-js',
       '@supabase/postgrest-js',
-      '@supabase/realtime-js'
+      '@supabase/realtime-js',
+      'emoji-mart',
+      '@emoji-mart/react',
+      '@emoji-mart/data'
     ],
     esbuildOptions: {
       target: 'es2020'
@@ -25,9 +28,11 @@ export default defineConfig({
   build: {
     target: 'es2020',
     rollupOptions: {
+      external: ['emoji-mart'],
       output: {
         manualChunks: {
           'supabase': ['@supabase/supabase-js'],
+          'emoji-mart': ['@emoji-mart/react', '@emoji-mart/data', 'emoji-mart'],
           'vendor': [
             'react',
             'react-dom',
@@ -38,6 +43,7 @@ export default defineConfig({
     }
   }
 })
+
 
 
 
