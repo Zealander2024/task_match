@@ -3,26 +3,46 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    global: 'window',
+    '__WS_TOKEN__': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY)
+  },
+  resolve: {
+    alias: {
+      './runtimeConfig': './runtimeConfig.browser',
+    }
+  },
   optimizeDeps: {
-    include: ['pdfjs-dist']
+    include: [
+      '@supabase/supabase-js',
+      '@supabase/postgrest-js',
+      '@supabase/realtime-js'
+    ],
+    esbuildOptions: {
+      target: 'es2020'
+    }
   },
   build: {
-    commonjsOptions: {
-      include: [/pdfjs-dist/],
-    },
+    target: 'es2020',
     rollupOptions: {
       output: {
         manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'pdf-vendor': ['pdfjs-dist']
+          'supabase': ['@supabase/supabase-js'],
+          'vendor': [
+            'react',
+            'react-dom',
+            'react-router-dom'
+          ]
         }
       }
     }
-  },
-  worker: {
-    format: 'es'
   }
 })
+
+
+
+
+
 
 
 
