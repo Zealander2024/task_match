@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, User, Loader2, ArrowRight } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Profile {
   id: string;
@@ -73,70 +74,65 @@ export function SelectRole() {
       setLoading(true);
       setError('');
 
-      // First, check if profile exists
-      const { data: existingProfile, error: checkError } = await supabase
+      // Update the profile with the selected role
+      const { error: updateError } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('id', user.id)
-        .single();
+        .update({ 
+          role: role,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
 
-      const profile: Profile = {
-        id: user.id,
-        role: role,
-        full_name: user.user_metadata?.full_name || '',
-        avatar_url: user.user_metadata?.avatar_url || '',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      if (updateError) throw updateError;
 
-      let upsertError;
-      if (!existingProfile) {
-        // Insert new profile
-        const { error } = await supabase
-          .from('profiles')
-          .insert([profile]);
-        upsertError = error;
-      } else {
-        // Update existing profile
-        const { error } = await supabase
-          .from('profiles')
-          .update({ 
-            role: role,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', user.id);
-        upsertError = error;
-      }
-
-      if (upsertError) throw upsertError;
-
+      // Trigger role change event
       window.dispatchEvent(new CustomEvent('roleChanged', {
         detail: { newRole: role }
       }));
 
-      if (role === 'employer') {
-        const { data: employerProfile } = await supabase
-          .from('employer_profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
+      toast.success(`Role selected: ${role === 'employer' ? 'Employer' : 'Job Seeker'}`);
 
-        if (!employerProfile) {
-          window.location.href = '/employer/create-profile';
-          return;
-        }
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 500));
-      window.location.href = role === 'employer' ? '/employer/dashboard' : '/dashboard';
-
-    } catch (err) {
-      console.error('Error setting role:', err);
-      setError(err instanceof Error ? err.message : 'Failed to set role');
-    } finally {
+      // Redirect to appropriate profile creation page using the correct path
+      const redirectPath = role === 'employer' 
+        ? '/employer/create-profile'
+        : '/create-profile';
+      
+      navigate(redirectPath);
+    } catch (error) {
+      console.error('Error updating role:', error);
+      setError('Failed to update role');
       setLoading(false);
     }
   };
+
+  // Add a check for profile completion
+  useEffect(() => {
+    const checkProfileStatus = async () => {
+      if (!user) return;
+
+      try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('role, profile_completed')
+          .eq('id', user.id)
+          .single();
+
+        if (error) throw error;
+
+        // If profile is already completed, redirect to appropriate dashboard
+        if (profile?.profile_completed) {
+          const redirectPath = profile.role === 'employer' 
+            ? '/employer/dashboard'
+            : '/job-seeker/dashboard';
+          navigate(redirectPath);
+        }
+      } catch (err) {
+        console.error('Error checking profile status:', err);
+      }
+    };
+
+    checkProfileStatus();
+  }, [user, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col items-center justify-center p-4">
@@ -259,6 +255,11 @@ export function SelectRole() {
     </div>
   );
 }
+
+
+
+
+
 
 
 

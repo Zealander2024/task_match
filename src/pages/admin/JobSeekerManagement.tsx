@@ -1,10 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
-import { User, Trash2, Edit, Plus, X } from 'lucide-react';
-import * as Dialog from '@radix-ui/react-dialog';
+import { useAdminAuth } from '../../context/AdminAuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useNavigate } from 'react-router-dom';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '../../components/ui/dialog';
+import { X, Check, ShieldCheck, Search } from 'lucide-react';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Textarea } from '../../components/ui/textarea';
 import { toast } from '../../components/ui/use-toast';
+import { format } from 'date-fns';
+import debounce from 'lodash/debounce';
 
+// Interfaces
 interface JobSeeker {
   id: string;
   full_name: string;
@@ -18,6 +26,11 @@ interface JobSeeker {
   portfolio_images: Array<{ url: string; link?: string }> | null;
   created_at: string;
   updated_at: string;
+  status: 'active' | 'inactive';
+  is_approved: boolean;
+  is_verified: boolean;
+  approved_at?: string;
+  verification_date?: string;
 }
 
 interface JobSeekerFormData {
@@ -28,12 +41,37 @@ interface JobSeekerFormData {
   skills: string[];
 }
 
+interface LocalFilters {
+  searchInput: string;
+}
+
+interface SearchFilters {
+  query: string;
+}
+
+interface State {
+  jobSeekers: JobSeeker[];
+  loading: boolean;
+  error: string | null;
+  isEditModalOpen: boolean;
+  selectedJobSeeker: JobSeeker | null;
+}
+
 export function JobSeekerManagement() {
+  // Hooks
+  const { isAdmin, loading: authLoading } = useAdminAuth();
   const { isDarkMode } = useTheme();
-  const [jobSeekers, setJobSeekers] = useState<JobSeeker[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedJobSeeker, setSelectedJobSeeker] = useState<JobSeeker | null>(null);
+  const navigate = useNavigate();
+
+  // State
+  const [state, setState] = useState<State>({
+    jobSeekers: [],
+    loading: true,
+    error: null,
+    isEditModalOpen: false,
+    selectedJobSeeker: null,
+  });
+
   const [formData, setFormData] = useState<JobSeekerFormData>({
     full_name: '',
     bio: '',
@@ -42,150 +80,178 @@ export function JobSeekerManagement() {
     skills: []
   });
 
-  useEffect(() => {
-    fetchJobSeekers();
-  }, []);
+  const [localFilters, setLocalFilters] = useState<LocalFilters>({
+    searchInput: ''
+  });
 
-  async function fetchJobSeekers() {
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({
+    query: ''
+  });
+
+  // Create a stable debounced function
+  const debouncedUpdateSearch = useCallback(
+    debounce((newFilters: Partial<SearchFilters>) => {
+      setSearchFilters(prev => ({ ...prev, ...newFilters }));
+    }, 500),
+    []
+  );
+
+  // Functions
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { value } = e.target;
+    setLocalFilters(prev => ({ ...prev, searchInput: value }));
+    debouncedUpdateSearch({ query: value });
+  };
+
+  const fetchJobSeekers = useCallback(async () => {
     try {
-      console.log('Fetching job seekers...');
-      const { data: profilesData, error: profilesError } = await supabase
+      setState(prev => ({ ...prev, loading: true }));
+
+      let query = supabase
         .from('profiles')
-        .select(`
-          id,
-          full_name,
-          role,
-          bio,
-          work_email,
-          years_of_experience,
-          skills,
-          avatar_url,
-          resume_url,
-          portfolio_images,
-          created_at,
-          updated_at
-        `)
-        .eq('role', 'job_seeker')
-        .order('created_at', { ascending: false });
+        .select('*')
+        .eq('role', 'job_seeker');
 
-      if (profilesError) {
-        throw profilesError;
+      // Apply search filter
+      if (searchFilters.query) {
+        const searchTerm = `%${searchFilters.query}%`;
+        query = query.or(`full_name.ilike.${searchTerm},work_email.ilike.${searchTerm},bio.ilike.${searchTerm}`);
       }
 
-      if (!profilesData || profilesData.length === 0) {
-        // If no job seekers exist, create a test job seeker
-        const testJobSeeker = {
-          full_name: 'Test Job Seeker',
-          role: 'job_seeker',
-          bio: 'This is a test job seeker account',
-          work_email: 'testjobseeker@example.com',
-          years_of_experience: 5,
-          skills: ['JavaScript', 'React', 'Node.js'],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
+      // Default sorting
+      query = query.order('created_at', { ascending: false });
 
-        const { data: insertedData, error: insertError } = await supabase
-          .from('profiles')
-          .insert([testJobSeeker])
-          .select();
+      const { data, error } = await query;
 
-        if (insertError) throw insertError;
+      if (error) throw error;
 
-        setJobSeekers(insertedData || []);
-        console.log('Created test job seeker:', insertedData);
-      } else {
-        setJobSeekers(profilesData);
-        console.log('Fetched job seekers:', profilesData);
-      }
+      setState(prev => ({
+        ...prev,
+        jobSeekers: data || [],
+        loading: false,
+        error: null
+      }));
     } catch (error) {
       console.error('Error fetching job seekers:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch job seekers",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: 'Failed to fetch job seekers'
+      }));
     }
-  }
+  }, [searchFilters]);
 
-  async function handleDelete(jobSeekerId: string) {
-    if (!window.confirm('Are you sure you want to delete this job seeker?')) return;
+  const handleApprove = async (jobSeekerId: string) => {
+    if (!window.confirm('Are you sure you want to approve this job seeker?')) return;
 
     try {
       const { error } = await supabase
         .from('profiles')
-        .delete()
+        .update({ 
+          status: 'active',
+          is_approved: true,
+          approved_at: new Date().toISOString()
+        })
         .eq('id', jobSeekerId);
 
       if (error) throw error;
-      
-      setJobSeekers(prev => prev.filter(seeker => seeker.id !== jobSeekerId));
+
+      setState(prev => ({
+        ...prev,
+        jobSeekers: prev.jobSeekers.map(seeker =>
+          seeker.id === jobSeekerId ? { ...seeker, status: 'active', is_approved: true } : seeker
+        )
+      }));
+
       toast({
         title: "Success",
-        description: "Job seeker deleted successfully"
+        description: "Job seeker approved successfully"
       });
     } catch (error) {
-      console.error('Error deleting job seeker:', error);
+      console.error('Error approving job seeker:', error);
       toast({
         title: "Error",
-        description: "Failed to delete job seeker",
+        description: "Failed to approve job seeker",
         variant: "destructive"
       });
     }
-  }
+  };
 
-  function handleEdit(jobSeeker: JobSeeker) {
-    setSelectedJobSeeker(jobSeeker);
-    setFormData({
-      full_name: jobSeeker.full_name || '',
-      bio: jobSeeker.bio || '',
-      work_email: jobSeeker.work_email || '',
-      years_of_experience: jobSeeker.years_of_experience || null,
-      skills: jobSeeker.skills || []
-    });
-    setIsEditModalOpen(true);
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    
-    if (!selectedJobSeeker?.id) {
-      toast({
-        title: "Error",
-        description: "No job seeker selected for editing",
-        variant: "destructive"
-      });
-      return;
-    }
-
+  const handleVerifyAI = async (jobSeekerId: string) => {
     try {
-      const updateData = {
-        full_name: formData.full_name,
-        bio: formData.bio || null,
-        work_email: formData.work_email || null,
-        years_of_experience: formData.years_of_experience,
-        skills: formData.skills,
-        updated_at: new Date().toISOString()
-      };
-
-      const { data, error } = await supabase
+      // Here you would typically call your AI verification service
+      // For now, we'll just mark as verified
+      const { error } = await supabase
         .from('profiles')
-        .update(updateData)
-        .eq('id', selectedJobSeeker.id)
-        .select()
-        .single();
+        .update({ 
+          is_verified: true,
+          verification_date: new Date().toISOString()
+        })
+        .eq('id', jobSeekerId);
 
       if (error) throw error;
 
-      setJobSeekers(prev => 
-        prev.map(seeker => 
-          seeker.id === selectedJobSeeker.id ? { ...seeker, ...updateData } : seeker
+      setState(prev => ({
+        ...prev,
+        jobSeekers: prev.jobSeekers.map(seeker =>
+          seeker.id === jobSeekerId ? { ...seeker, is_verified: true } : seeker
         )
-      );
-      
-      setIsEditModalOpen(false);
+      }));
+
+      toast({
+        title: "Success",
+        description: "Job seeker verified successfully"
+      });
+    } catch (error) {
+      console.error('Error verifying job seeker:', error);
+      toast({
+        title: "Error",
+        description: "Failed to verify job seeker",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleEdit = (jobSeeker: JobSeeker) => {
+    setState(prev => ({
+      ...prev,
+      selectedJobSeeker: jobSeeker,
+      isEditModalOpen: true
+    }));
+    setFormData({
+      full_name: jobSeeker.full_name,
+      bio: jobSeeker.bio || '',
+      work_email: jobSeeker.work_email || '',
+      years_of_experience: jobSeeker.years_of_experience,
+      skills: jobSeeker.skills || []
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!state.selectedJobSeeker?.id) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          ...formData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', state.selectedJobSeeker.id);
+
+      if (error) throw error;
+
+      setState(prev => ({
+        ...prev,
+        jobSeekers: prev.jobSeekers.map(seeker =>
+          seeker.id === state.selectedJobSeeker?.id
+            ? { ...seeker, ...formData }
+            : seeker
+        ),
+        isEditModalOpen: false
+      }));
+
       toast({
         title: "Success",
         description: "Job seeker updated successfully"
@@ -198,205 +264,238 @@ export function JobSeekerManagement() {
         variant: "destructive"
       });
     }
+  };
+
+  // Effects
+  useEffect(() => {
+    if (!authLoading && isAdmin) {
+      fetchJobSeekers();
+    }
+  }, [searchFilters, isAdmin, authLoading]);
+
+  useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      navigate('/admin/login');
+    }
+  }, [isAdmin, authLoading, navigate]);
+
+  // Render helpers
+  if (authLoading || state.loading) {
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-200">
-        Loading...
-      </div>
-    );
+  if (!isAdmin) {
+    return null;
   }
 
-  return (
-    <div 
-      data-theme={isDarkMode ? 'dark' : 'light'}
-      className="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-white transition-colors duration-200"
-    >
-      <div className="px-4 sm:px-6 lg:px-8">
-        <div className="sm:flex sm:items-center">
-          <div className="sm:flex-auto">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white transition-colors duration-200">
-              Job Seeker Management
-            </h1>
-            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 transition-colors duration-200">
-              Manage job seeker accounts and their information
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-8 flex flex-col">
-          <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-            <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 transition-colors duration-200">
-                  <thead className="bg-gray-50 dark:bg-gray-800 transition-colors duration-200">
-                    <tr>
-                      <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Profile</th>
-                      <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Email</th>
-                      <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Experience</th>
-                      <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Skills</th>
-                      <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Joined</th>
-                      <th className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                        <span className="sr-only">Actions</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700 transition-colors duration-200">
-                    {jobSeekers.map((seeker) => (
-                      <tr key={seeker.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
-                        <td className="px-3 py-4 text-sm text-gray-900 dark:text-white">
-                          <div className="flex items-center">
-                            <div className="h-10 w-10 flex-shrink-0">
-                              {seeker.avatar_url ? (
-                                <img
-                                  className="h-10 w-10 rounded-full"
-                                  src={seeker.avatar_url}
-                                  alt=""
-                                />
-                              ) : (
-                                <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
-                                  <User className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="ml-4">
-                              <div className="font-medium text-gray-900 dark:text-white">{seeker.full_name}</div>
-                              <div className="text-gray-500 dark:text-gray-400">{seeker.bio}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">{seeker.work_email}</td>
-                        <td className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                          {seeker.years_of_experience} years
-                        </td>
-                        <td className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                          {seeker.skills?.join(', ')}
-                        </td>
-                        <td className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                          {new Date(seeker.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="relative py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                          <button
-                            onClick={() => handleEdit(seeker)}
-                            className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4"
-                          >
-                            <Edit className="h-5 w-5" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(seeker.id)}
-                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <Dialog.Root open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-          <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 bg-black/30 dark:bg-black/50 transition-colors duration-200" />
-            <Dialog.Content className="fixed inset-0 z-10 overflow-y-auto">
-              <div className="flex min-h-screen items-center justify-center">
-                <div className="relative bg-white dark:bg-gray-800 rounded-lg p-8 max-w-md w-full mx-4 transition-colors duration-200">
-                  <div className="flex justify-between items-center mb-6">
-                    <Dialog.Title className="text-lg font-medium text-gray-900 dark:text-white transition-colors duration-200">
-                      Edit Job Seeker
-                    </Dialog.Title>
-                    <Dialog.Close className="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400 transition-colors duration-200">
-                      <X className="h-5 w-5" />
-                    </Dialog.Close>
-                  </div>
-
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors duration-200">
-                        Full Name
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.full_name}
-                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors duration-200">
-                        Bio
-                      </label>
-                      <textarea
-                        value={formData.bio}
-                        onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                        rows={3}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors duration-200">
-                        Work Email
-                      </label>
-                      <input
-                        type="email"
-                        value={formData.work_email}
-                        onChange={(e) => setFormData({ ...formData, work_email: e.target.value })}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors duration-200">
-                        Years of Experience
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.years_of_experience || ''}
-                        onChange={(e) => setFormData({ ...formData, years_of_experience: parseInt(e.target.value) || null })}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors duration-200">
-                        Skills (comma-separated)
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.skills.join(', ')}
-                        onChange={(e) => setFormData({ ...formData, skills: e.target.value.split(',').map(s => s.trim()) })}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
-                      />
-                    </div>
-
-                    <div className="mt-6 flex justify-end space-x-3">
-                      <Dialog.Close className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-200 transition-colors duration-200">
-                        Cancel
-                      </Dialog.Close>
-                      <button
-                        type="submit"
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-md transition-colors duration-200"
-                      >
-                        Save Changes
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </Dialog.Content>
-          </Dialog.Portal>
-        </Dialog.Root>
+  const SearchAndFilters = () => (
+    <div className="mb-6">
+      <div className="w-full md:w-1/2">
+        <Input
+          placeholder="Search by name, email, or bio..."
+          value={localFilters.searchInput}
+          onChange={handleInputChange}
+          className="w-full"
+          leftIcon={<Search className="h-4 w-4" />}
+        />
       </div>
     </div>
   );
+
+  return (
+    <div className={`min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-white`}>
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold mb-6">Job Seeker Management</h1>
+
+        {/* Search input only */}
+        <SearchAndFilters />
+
+        {/* Job Seekers Table */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead>
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Experience</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Skills</th>
+                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {state.jobSeekers.map((seeker) => (
+                <JobSeekerRow
+                  key={seeker.id}
+                  seeker={seeker}
+                  onApprove={() => handleApprove(seeker.id)}
+                  onVerifyAI={() => handleVerifyAI(seeker.id)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Edit Modal */}
+      <EditModal
+        isOpen={state.isEditModalOpen}
+        onClose={() => setState(prev => ({ ...prev, isEditModalOpen: false }))}
+        formData={formData}
+        setFormData={setFormData}
+        onSubmit={handleSubmit}
+      />
+    </div>
+  );
 }
+
+// Sub-components
+const JobSeekerRow: React.FC<{
+  seeker: JobSeeker;
+  onApprove: () => void;
+  onVerifyAI: () => void;
+}> = ({ seeker, onApprove, onVerifyAI }) => (
+  <tr>
+    <td className="px-6 py-4 whitespace-nowrap">
+      <div className="flex items-center">
+        <div className="flex-shrink-0 h-10 w-10">
+          {seeker.avatar_url ? (
+            <img className="h-10 w-10 rounded-full" src={seeker.avatar_url} alt="" />
+          ) : (
+            <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+              <span>{seeker.full_name[0]}</span>
+            </div>
+          )}
+        </div>
+        <div className="ml-4">
+          <div className="text-sm font-medium">{seeker.full_name}</div>
+        </div>
+      </div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap text-sm">{seeker.work_email}</td>
+    <td className="px-6 py-4 whitespace-nowrap text-sm">
+      {seeker.years_of_experience} years
+    </td>
+    <td className="px-6 py-4">
+      <div className="flex flex-wrap gap-1">
+        {seeker.skills?.map((skill, index) => (
+          <span
+            key={index}
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+          >
+            {skill}
+          </span>
+        ))}
+      </div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap text-sm">
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+        seeker.status === 'active' 
+          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+          : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+      }`}>
+        {seeker.status}
+      </span>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={onApprove} 
+        className="mr-2"
+        disabled={seeker.is_approved}
+      >
+        <Check className={`h-4 w-4 ${seeker.is_approved ? 'text-green-500' : 'text-gray-500'}`} />
+        <span className="ml-2">{seeker.is_approved ? 'Approved' : 'Approve'}</span>
+      </Button>
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={onVerifyAI}
+        disabled={seeker.is_verified}
+      >
+        <ShieldCheck className={`h-4 w-4 ${seeker.is_verified ? 'text-blue-500' : 'text-gray-500'}`} />
+        <span className="ml-2">{seeker.is_verified ? 'Verified' : 'Verify AI'}</span>
+      </Button>
+    </td>
+  </tr>
+);
+
+const EditModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  formData: JobSeekerFormData;
+  setFormData: (data: JobSeekerFormData) => void;
+  onSubmit: (e: React.FormEvent) => void;
+}> = ({ isOpen, onClose, formData, setFormData, onSubmit }) => (
+  <Dialog open={isOpen} onOpenChange={onClose}>
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Edit Job Seeker</DialogTitle>
+        <DialogClose asChild>
+          <Button variant="ghost" size="sm" className="absolute right-4 top-4">
+            <X className="h-4 w-4" />
+          </Button>
+        </DialogClose>
+      </DialogHeader>
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Full Name</label>
+          <Input
+            value={formData.full_name}
+            onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Bio</label>
+          <Textarea
+            value={formData.bio}
+            onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Work Email</label>
+          <Input
+            type="email"
+            value={formData.work_email}
+            onChange={(e) => setFormData({ ...formData, work_email: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Years of Experience</label>
+          <Input
+            type="number"
+            value={formData.years_of_experience || ''}
+            onChange={(e) => setFormData({
+              ...formData,
+              years_of_experience: e.target.value ? Number(e.target.value) : null
+            })}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Skills (comma-separated)</label>
+          <Input
+            value={formData.skills.join(', ')}
+            onChange={(e) => setFormData({
+              ...formData,
+              skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+            })}
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit">
+            Save Changes
+          </Button>
+        </div>
+      </form>
+    </DialogContent>
+  </Dialog>
+);
+
+
 
 
 

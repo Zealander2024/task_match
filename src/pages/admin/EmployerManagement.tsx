@@ -1,98 +1,58 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
-import { User, Trash2, Edit, Plus, X } from 'lucide-react';
-import * as Dialog from '@radix-ui/react-dialog';
+import { useAdminAuth } from '../../context/AdminAuthContext';
+import { Check, ShieldCheck, Search } from 'lucide-react';
 import { toast } from '../../components/ui/use-toast';
+import { Card } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { useNavigate } from 'react-router-dom';
 
 interface Employer {
   id: string;
   full_name: string;
-  role: string;
-  bio: string | null;
-  work_email: string | null;
-  years_of_experience: number | null;
-  skills: string[] | null;
-  avatar_url: string | null;
-  resume_url: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface EmployerFormData {
-  full_name: string;
-  bio: string;
   work_email: string;
+  avatar_url?: string;
   years_of_experience: number | null;
   skills: string[];
+  status: 'active' | 'inactive';
+  is_approved: boolean;
+  is_verified: boolean;
+  approved_at?: string;
+  verification_date?: string;
 }
 
 export function EmployerManagement() {
+  const { isAdmin, loading: authLoading } = useAdminAuth();
+  const navigate = useNavigate();
   const [employers, setEmployers] = useState<Employer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedEmployer, setSelectedEmployer] = useState<Employer | null>(null);
-  const [formData, setFormData] = useState<EmployerFormData>({
-    full_name: '',
-    bio: '',
-    work_email: '',
-    years_of_experience: null,
-    skills: []
-  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState('all');
 
   useEffect(() => {
-    fetchEmployers();
-  }, []);
+    if (!authLoading && isAdmin) {
+      fetchEmployers();
+    }
+  }, [isAdmin, authLoading]);
+
+  useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      navigate('/admin/login');
+    }
+  }, [isAdmin, authLoading, navigate]);
 
   async function fetchEmployers() {
     try {
-      const { data: profilesData, error: profilesError } = await supabase
+      setLoading(true);
+      const { data, error } = await supabase
         .from('profiles')
-        .select(`
-          id,
-          full_name,
-          role,
-          bio,
-          work_email,
-          years_of_experience,
-          skills,
-          avatar_url,
-          resume_url,
-          created_at,
-          updated_at
-        `)
-        .eq('role', 'employer')
-        .order('created_at', { ascending: false });
+        .select('*')
+        .eq('role', 'employer');
 
-      if (profilesError) {
-        throw profilesError;
-      }
+      if (error) throw error;
 
-      if (!profilesData || profilesData.length === 0) {
-        // If no employers exist, create a test employer
-        const testEmployer = {
-          full_name: 'Test Employer',
-          role: 'employer',
-          bio: 'This is a test employer account',
-          work_email: 'testemployer@example.com',
-          years_of_experience: 10,
-          skills: ['Hiring', 'Management', 'HR'],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-
-        const { data: insertedData, error: insertError } = await supabase
-          .from('profiles')
-          .insert([testEmployer])
-          .select();
-
-        if (insertError) throw insertError;
-
-        setEmployers(insertedData || []);
-        console.log('Created test employer:', insertedData);
-      } else {
-        setEmployers(profilesData);
-        console.log('Fetched employers:', profilesData);
-      }
+      setEmployers(data || []);
     } catch (error) {
       console.error('Error fetching employers:', error);
       toast({
@@ -105,313 +65,224 @@ export function EmployerManagement() {
     }
   }
 
-  async function handleDelete(employerId: string) {
-    if (!window.confirm('Are you sure you want to delete this employer?')) return;
+  async function handleApprove(employerId: string) {
+    if (!window.confirm('Are you sure you want to approve this employer?')) return;
 
     try {
-      // First delete the profile
-      const { error: profileError } = await supabase
+      const { error } = await supabase
         .from('profiles')
-        .delete()
+        .update({ 
+          status: 'active',
+          is_approved: true,
+          approved_at: new Date().toISOString()
+        })
         .eq('id', employerId);
 
-      if (profileError) throw profileError;
-
-      // Update the local state
-      setEmployers(prev => prev.filter(emp => emp.id !== employerId));
-      
-      toast({
-        title: "Success",
-        description: "Employer deleted successfully"
-      });
-    } catch (error) {
-      console.error('Error deleting employer:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete employer",
-        variant: "destructive"
-      });
-    }
-  }
-
-  function handleEdit(employer: Employer) {
-    setSelectedEmployer(employer);
-    setFormData({
-      full_name: employer.full_name || '',
-      bio: employer.bio || '',
-      work_email: employer.work_email || '',
-      years_of_experience: employer.years_of_experience || null,
-      skills: employer.skills || []
-    });
-    setIsEditModalOpen(true);
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    
-    if (!selectedEmployer?.id) {
-      toast({
-        title: "Error",
-        description: "No employer selected for editing",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      const updateData = {
-        full_name: formData.full_name,
-        bio: formData.bio || null,
-        work_email: formData.work_email || null,
-        years_of_experience: formData.years_of_experience,
-        skills: formData.skills,
-        updated_at: new Date().toISOString()
-      };
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(updateData)
-        .eq('id', selectedEmployer.id)
-        .select()
-        .single();
-
       if (error) throw error;
 
-      setEmployers(employers.map(emp => 
-        emp.id === selectedEmployer.id ? { ...emp, ...updateData } : emp
+      setEmployers(prev => prev.map(employer =>
+        employer.id === employerId 
+          ? { ...employer, status: 'active', is_approved: true }
+          : employer
       ));
-      
-      setIsEditModalOpen(false);
+
       toast({
         title: "Success",
-        description: "Employer updated successfully"
+        description: "Employer approved successfully"
       });
     } catch (error) {
-      console.error('Error updating employer:', error);
+      console.error('Error approving employer:', error);
       toast({
         title: "Error",
-        description: "Failed to update employer",
+        description: "Failed to approve employer",
         variant: "destructive"
       });
     }
   }
 
-  // Add new employer function
-  async function handleAddEmployer() {
-    const newEmployer: Partial<Employer> = {
-      full_name: formData.full_name,
-      role: 'employer',
-      bio: formData.bio || null,
-      work_email: formData.work_email || null,
-      years_of_experience: formData.years_of_experience,
-      skills: formData.skills,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
+  async function handleVerifyAI(employerId: string) {
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('profiles')
-        .insert([newEmployer])
-        .select()
-        .single();
+        .update({ 
+          is_verified: true,
+          verification_date: new Date().toISOString()
+        })
+        .eq('id', employerId);
 
       if (error) throw error;
 
-      setEmployers([data, ...employers]);
-      setIsEditModalOpen(false);
+      setEmployers(prev => prev.map(employer =>
+        employer.id === employerId 
+          ? { ...employer, is_verified: true }
+          : employer
+      ));
+
       toast({
         title: "Success",
-        description: "Employer added successfully"
+        description: "Employer verified successfully"
       });
     } catch (error) {
-      console.error('Error adding employer:', error);
+      console.error('Error verifying employer:', error);
       toast({
         title: "Error",
-        description: "Failed to add employer",
+        description: "Failed to verify employer",
         variant: "destructive"
       });
     }
   }
 
-  if (loading) {
+  const filteredEmployers = employers.filter(employer => {
+    const matchesSearch = employer.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         employer.work_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         employer.skills?.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    if (selectedFilter === 'all') return matchesSearch;
+    return matchesSearch && employer.status === selectedFilter;
+  });
+
+  if (authLoading || loading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
+  if (!isAdmin) {
+    return null;
+  }
+
   return (
-    <div className="px-4 sm:px-6 lg:px-8 py-8 min-h-screen bg-white dark:bg-gray-900">
-      <div className="sm:flex sm:items-center">
-        <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Employer Management</h1>
-          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            Manage employer accounts and their information
-          </p>
-        </div>
+    <div className="space-y-6 p-8">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          Employer Management
+        </h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Manage and oversee employer accounts
+        </p>
       </div>
 
-      <div className="mt-8 flex flex-col">
-        <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 rounded-lg">
-              <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Full Name</th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Email</th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Experience</th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Skills</th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Joined</th>
-                    <th className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
-                  {employers.length > 0 ? (
-                    employers.map((employer) => (
-                      <tr key={employer.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900 dark:text-white">
-                          {employer.full_name || '-'}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                          {employer.work_email || '-'}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                          {employer.years_of_experience ? `${employer.years_of_experience} years` : '-'}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                          {employer.skills ? employer.skills.join(', ') : '-'}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                          {new Date(employer.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                          <button
-                            onClick={() => handleEdit(employer)}
-                            className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4"
-                          >
-                            <Edit className="h-5 w-5" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(employer.id)}
-                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
-                        No employers found
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex-1">
+          <Input
+            placeholder="Search employers..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full"
+            icon={<Search className="h-4 w-4" />}
+          />
         </div>
+        <select
+          value={selectedFilter}
+          onChange={(e) => setSelectedFilter(e.target.value)}
+          className="form-select rounded-md border-gray-300 dark:border-gray-700"
+        >
+          <option value="all">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
       </div>
 
-      <Dialog.Root open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/50 dark:bg-black/70" />
-          <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <Dialog.Title className="text-xl font-semibold text-gray-900 dark:text-white">
-                {selectedEmployer ? 'Edit Employer' : 'Add Employer'}
-              </Dialog.Title>
-              <Dialog.Close className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                <X className="h-5 w-5" />
-              </Dialog.Close>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b dark:border-gray-700">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Name
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Email
-                </label>
-                <input
-                  type="email"
-                  value={formData.work_email}
-                  onChange={(e) => setFormData({ ...formData, work_email: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Bio
-                </label>
-                <textarea
-                  value={formData.bio}
-                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Years of Experience
-                </label>
-                <input
-                  type="number"
-                  value={formData.years_of_experience || ''}
-                  onChange={(e) => setFormData({ ...formData, years_of_experience: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Experience
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Skills
-                </label>
-                <input
-                  type="text"
-                  value={formData.skills.join(', ')}
-                  onChange={(e) => setFormData({ ...formData, skills: e.target.value.split(', ').filter(s => s.trim()) })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
-
-              <div className="mt-4 flex justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-md"
-                >
-                  {selectedEmployer ? 'Save Changes' : 'Add Employer'}
-                </button>
-              </div>
-            </form>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {filteredEmployers.map((employer) => (
+                <tr key={employer.id}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10">
+                        {employer.avatar_url ? (
+                          <img className="h-10 w-10 rounded-full" src={employer.avatar_url} alt="" />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                            <span>{employer.full_name[0]}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="ml-4">
+                        <div className="text-sm font-medium">{employer.full_name}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">{employer.work_email}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {employer.years_of_experience} years
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-1">
+                      {employer.skills?.map((skill, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      employer.status === 'active' 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                        : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                    }`}>
+                      {employer.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => handleApprove(employer.id)} 
+                      className="mr-2"
+                      disabled={employer.is_approved}
+                    >
+                      <Check className={`h-4 w-4 ${employer.is_approved ? 'text-green-500' : 'text-gray-500'}`} />
+                      <span className="ml-2">{employer.is_approved ? 'Approved' : 'Approve'}</span>
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => handleVerifyAI(employer.id)}
+                      disabled={employer.is_verified}
+                    >
+                      <ShieldCheck className={`h-4 w-4 ${employer.is_verified ? 'text-blue-500' : 'text-gray-500'}`} />
+                      <span className="ml-2">{employer.is_verified ? 'Verified' : 'Verify AI'}</span>
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }
+
+
+
 
 
 

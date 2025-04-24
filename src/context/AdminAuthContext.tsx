@@ -1,26 +1,36 @@
-import React, { createContext, useContext, useState } from 'react';
-import { ADMIN_CREDENTIALS } from '../constants/adminConfig';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { ADMIN_CREDENTIALS, LOCAL_STORAGE_KEYS } from '../constants/adminConfig';
 
 interface AdminAuthContextType {
   isAdmin: boolean;
   loading: boolean;
   adminSignIn: (email: string, password: string) => Promise<void>;
-  adminSignOut: () => Promise<void>;
+  adminSignOut: () => void;
 }
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
-export function useAdminAuth() {
-  const context = useContext(AdminAuthContext);
-  if (!context) {
-    throw new Error('useAdminAuth must be used within an AdminAuthProvider');
-  }
-  return context;
-}
-
 export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check for admin session on mount
+    const adminSession = localStorage.getItem(LOCAL_STORAGE_KEYS.ADMIN_SESSION);
+    if (adminSession) {
+      const session = JSON.parse(adminSession);
+      const isValid = validateAdminSession(session);
+      setIsAdmin(isValid);
+    }
+    setLoading(false);
+  }, []);
+
+  function validateAdminSession(session: any) {
+    if (!session) return false;
+    // Session expires after 24 hours
+    const isExpired = Date.now() - session.timestamp > 24 * 60 * 60 * 1000;
+    return !isExpired && session.token === ADMIN_CREDENTIALS.token;
+  }
 
   async function adminSignIn(email: string, password: string) {
     setLoading(true);
@@ -29,12 +39,14 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Invalid admin credentials');
       }
       
-      // Store admin session in localStorage
-      localStorage.setItem('adminSession', JSON.stringify({ 
+      // Store admin session
+      const sessionData = {
         email: ADMIN_CREDENTIALS.email,
-        isAdmin: true 
-      }));
+        timestamp: Date.now(),
+        token: ADMIN_CREDENTIALS.token,
+      };
       
+      localStorage.setItem(LOCAL_STORAGE_KEYS.ADMIN_SESSION, JSON.stringify(sessionData));
       setIsAdmin(true);
     } catch (error) {
       console.error('Admin sign in error:', error);
@@ -44,40 +56,24 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  async function adminSignOut() {
-    setLoading(true);
-    try {
-      localStorage.removeItem('adminSession');
-      setIsAdmin(false);
-    } finally {
-      setLoading(false);
-    }
+  function adminSignOut() {
+    localStorage.removeItem(LOCAL_STORAGE_KEYS.ADMIN_SESSION);
+    setIsAdmin(false);
   }
 
-  // Check for existing admin session on mount
-  React.useEffect(() => {
-    const adminSession = localStorage.getItem('adminSession');
-    if (adminSession) {
-      const session = JSON.parse(adminSession);
-      setIsAdmin(session.email === ADMIN_CREDENTIALS.email);
-    }
-    setLoading(false);
-  }, []);
-
-  const value = {
-    isAdmin,
-    loading,
-    adminSignIn,
-    adminSignOut,
-  };
-
   return (
-    <AdminAuthContext.Provider value={value}>
+    <AdminAuthContext.Provider value={{ isAdmin, loading, adminSignIn, adminSignOut }}>
       {children}
     </AdminAuthContext.Provider>
   );
 }
 
-
+export function useAdminAuth() {
+  const context = useContext(AdminAuthContext);
+  if (context === undefined) {
+    throw new Error('useAdminAuth must be used within an AdminAuthProvider');
+  }
+  return context;
+}
 
 

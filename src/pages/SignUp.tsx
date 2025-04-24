@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserPlus, Check, X, Eye, EyeOff, AlertCircle, Mail } from 'lucide-react';
 import zxcvbn from 'zxcvbn';
 import { supabase } from '../services/supabase';
+import { toast } from 'sonner'; // Add toast for better notifications
 
 export function SignUp() {
   const [email, setEmail] = useState('');
@@ -90,7 +91,8 @@ export function SignUp() {
         options: {
           data: {
             full_name: fullName,
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            profile_completed: false // Add this flag
           }
         }
       });
@@ -101,6 +103,21 @@ export function SignUp() {
         throw new Error('Signup failed - no user data returned');
       }
 
+      // Create initial profile entry
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: data.user.id,
+            full_name: fullName,
+            email: email.trim().toLowerCase(),
+            created_at: new Date().toISOString(),
+            profile_completed: false
+          }
+        ]);
+
+      if (profileError) throw profileError;
+
       // After successful signup, sign in automatically
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
@@ -109,12 +126,13 @@ export function SignUp() {
 
       if (signInError) throw signInError;
 
-      // Redirect to role selection instead of profile creation
+      toast.success('Account created successfully!');
       navigate('/select-role');
 
     } catch (err) {
       console.error('Signup error:', err);
       setError(err instanceof Error ? err.message : 'Failed to create account');
+      toast.error('Failed to create account');
     } finally {
       setLoading(false);
     }
@@ -310,35 +328,5 @@ export function SignUp() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

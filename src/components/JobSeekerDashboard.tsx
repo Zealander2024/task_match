@@ -1,18 +1,20 @@
-import { useState, useEffect } from 'react';
-import { JobSearch } from './JobSearch';
+import { useState, useEffect, useCallback } from 'react';
 import { JobPostsList } from './JobPostsList';
 import { JobPostDialog } from './JobPostDialog';
+import { SavedJobsDialog } from './SavedJobsDialog';
 import { Card } from './ui/card';
 import { Root as Tabs, List as TabsList, Trigger as TabsTrigger, Content as TabsContent } from '@radix-ui/react-tabs';
-import { Badge } from './ui/badge';
-import { Briefcase, BookMarked, Clock, Trophy, Plus } from 'lucide-react';
+import { Briefcase, BookMarked, Clock, Trophy, ExternalLink } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
+import { toast } from './ui/use-toast';
+import { Button } from './ui/button';
 
 export function JobSeekerDashboard() {
   const { user } = useAuth();
-  const [selectedJob, setSelectedJob] = useState(null);
+  const [selectedJob, setSelectedJob] = useState<JobPost | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [savedJobsDialogOpen, setSavedJobsDialogOpen] = useState(false);
   const [stats, setStats] = useState({
     applied: 0,
     saved: 0,
@@ -21,6 +23,11 @@ export function JobSeekerDashboard() {
     availableJobs: 0
   });
   const [loading, setLoading] = useState(true);
+
+  // Add this function to refresh stats
+  const refreshStats = useCallback(() => {
+    fetchDashboardStats();
+  }, [user]);
 
   useEffect(() => {
     fetchDashboardStats();
@@ -32,32 +39,27 @@ export function JobSeekerDashboard() {
     try {
       setLoading(true);
 
-      // Fetch total available active jobs
       const { count: availableCount } = await supabase
         .from('job_posts')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'active');
 
-      // Fetch applied jobs count
       const { count: appliedCount } = await supabase
         .from('job_applications')
         .select('*', { count: 'exact', head: true })
         .eq('job_seeker_id', user.id);
 
-      // Fetch saved jobs count
       const { count: savedCount } = await supabase
         .from('saved_jobs')
         .select('*', { count: 'exact', head: true })
         .eq('job_seeker_id', user.id);
 
-      // Fetch pending applications count
       const { count: pendingCount } = await supabase
         .from('job_applications')
         .select('*', { count: 'exact', head: true })
         .eq('job_seeker_id', user.id)
         .eq('status', 'pending');
 
-      // Fetch interview count (applications with status 'interviewing')
       const { count: interviewCount } = await supabase
         .from('job_applications')
         .select('*', { count: 'exact', head: true })
@@ -78,21 +80,41 @@ export function JobSeekerDashboard() {
     }
   };
 
-  const handleJobSelect = (job: any) => {
-    setSelectedJob(job);
-    setDialogOpen(true);
-  };
+  const handleJobSelect = async (jobId: string) => {
+    try {
+      const { data: jobData, error: jobError } = await supabase
+        .from('job_posts')
+        .select('*')
+        .eq('id', jobId)
+        .single();
 
-  // Add quick actions
-  const QuickActions = () => (
-    <div className="flex gap-4 mb-6">
-      <button className="inline-flex items-center px-4 py-2 rounded-md bg-blue-50 text-blue-700">
-        <Plus className="w-4 h-4 mr-2" />
-        Quick Apply
-      </button>
-      {/* More quick actions */}
-    </div>
-  );
+      if (jobError) throw jobError;
+
+      if (jobData.employer_id) {
+        const { data: employerData, error: employerError } = await supabase
+          .from('users')
+          .select('full_name, company_name, avatar_url')
+          .eq('id', jobData.employer_id)
+          .single();
+
+        if (employerError) {
+          console.error('Error fetching employer details:', employerError);
+        } else {
+          jobData.employer = employerData;
+        }
+      }
+
+      setSelectedJob(jobData);
+      setDialogOpen(true);
+    } catch (error) {
+      console.error('Error fetching job details:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load job details',
+        variant: 'destructive',
+      });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -117,15 +139,27 @@ export function JobSeekerDashboard() {
             </div>
           </Card>
 
-          <Card className="p-4">
+          <Card className="p-4 cursor-pointer hover:bg-gray-50 transition-colors" 
+                onClick={() => setSavedJobsDialogOpen(true)}>
             <div className="flex items-center space-x-3">
               <div className="p-3 bg-green-100 rounded-lg">
                 <BookMarked className="h-6 w-6 text-green-600" />
               </div>
-              <div>
+              <div className="flex-grow">
                 <p className="text-sm text-gray-500">Saved Jobs</p>
                 <p className="text-2xl font-semibold">{stats.saved}</p>
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSavedJobsDialogOpen(true);
+                }}
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Button>
             </div>
           </Card>
 
@@ -160,35 +194,19 @@ export function JobSeekerDashboard() {
         <Tabs defaultValue="available" className="w-full">
           <div className="px-6 pt-6">
             <TabsList className="w-full justify-start space-x-4 border-b">
-              <TabsTrigger value="available" className="relative">
-                Available Jobs
-                <Badge className="ml-2 bg-blue-100 text-blue-700">
-                  {stats.availableJobs}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="applied" className="relative">
-                Applied
-                <Badge className="ml-2 bg-green-100 text-green-700">
-                  {stats.applied}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="saved" className="relative">
-                Saved
-                <Badge className="ml-2 bg-yellow-100 text-yellow-700">
-                  {stats.saved}
-                </Badge>
-              </TabsTrigger>
+              <TabsTrigger value="available">Available Jobs</TabsTrigger>
+              <TabsTrigger value="applied">Applied Jobs</TabsTrigger>
+              <TabsTrigger value="saved">Saved Jobs</TabsTrigger>
             </TabsList>
           </div>
 
           <div className="p-6">
-            <JobSearch 
-              className="mb-6"
-              onSearch={(params) => console.log('Search params:', params)} 
-            />
-
             <TabsContent value="available">
-              <JobPostsList onJobSelect={handleJobSelect} />
+              <JobPostsList 
+                onJobSelect={handleJobSelect}
+                userId={user?.id}
+                onSaveStateChange={refreshStats}
+              />
             </TabsContent>
 
             <TabsContent value="applied">
@@ -196,6 +214,7 @@ export function JobSeekerDashboard() {
                 onJobSelect={handleJobSelect} 
                 filter="applied"
                 userId={user?.id}
+                onSaveStateChange={refreshStats}
               />
             </TabsContent>
 
@@ -204,6 +223,7 @@ export function JobSeekerDashboard() {
                 onJobSelect={handleJobSelect} 
                 filter="saved"
                 userId={user?.id}
+                onSaveStateChange={refreshStats}
               />
             </TabsContent>
           </div>
@@ -215,9 +235,27 @@ export function JobSeekerDashboard() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
       />
+
+      <SavedJobsDialog
+        open={savedJobsDialogOpen}
+        onOpenChange={setSavedJobsDialogOpen}
+        onJobSelect={handleJobSelect}
+        onSaveStateChange={refreshStats}
+      />
     </div>
   );
 } 
+
+
+
+
+
+
+
+
+
+
+
 
 
 
