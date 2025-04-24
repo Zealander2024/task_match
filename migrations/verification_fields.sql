@@ -1,4 +1,0 @@
-ALTER TABLE profiles
-ADD COLUMN is_verified BOOLEAN DEFAULT FALSE,
-ADD COLUMN verification_date TIMESTAMP WITH TIME ZONE,
-ADD COLUMN verification_document VARCHAR(255);
