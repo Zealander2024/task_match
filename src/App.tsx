@@ -38,6 +38,10 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { CreateFirstAdmin } from './pages/admin/CreateFirstAdmin';
 import { PayPalConfig } from './components/PayPalConfig';
 import { EmployerCandidatesPage } from './pages/employer/CandidatesPage';
+import { ProfileCreation } from './pages/ProfileCreation';
+import { VerificationControl } from './pages/owner/VerificationControl';
+import { AdminVerificationControl } from './pages/admin/AdminVerificationControl';
+import { ApplicationsPage } from './pages/admin/ApplicationsPage';
 
 // Implement lazy loading for routes
 const JobSeekerDashboard = lazy(() => import('./components/JobSeekerDashboard').then(module => ({ default: module.JobSeekerDashboard })));
@@ -212,7 +216,7 @@ function App() {
                     path="/create-profile"
                     element={
                       <ProtectedRoute>
-                        <CreateProfile />
+                        <ProfileCreation />
                       </ProtectedRoute>
                     }
                   />
@@ -369,6 +373,15 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
+                  {/* Owner routes */}
+                  <Route
+                    path="/owner/verification-control"
+                    element={
+                      <ProtectedRoute>
+                        <VerificationControl />
+                      </ProtectedRoute>
+                    }
+                  />
                   {/* Admin routes */}
                   <Route path="/admin/create-first-admin" element={<CreateFirstAdmin />} />
                   <Route path="/admin/login" element={<AdminLogin />} />
@@ -381,11 +394,12 @@ function App() {
                             <Route path="dashboard" element={<AdminDashboard />} />
                             <Route path="employers" element={<EmployerManagement />} />
                             <Route path="job-seekers" element={<JobSeekerManagement />} />
+                            <Route path="verification" element={<AdminVerificationControl />} />
                             <Route path="job-posts" element={<JobPostManagement />} />
                             <Route path="reports" element={<Reports />} />
                             <Route path="settings" element={<AdminSettings />} />
                             <Route path="profile" element={<AdminProfileManagement />} />
-                            {/* Add a redirect for the root admin path */}
+                            <Route path="applications" element={<ApplicationsPage />} />
                             <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
                           </Routes>
                         </AdminLayout>
@@ -419,6 +433,7 @@ function AdminProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <div>Loading...</div>;
   return isAdmin ? <>{children}</> : null;
 }
+
 
 
 

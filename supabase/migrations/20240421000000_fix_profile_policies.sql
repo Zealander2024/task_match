@@ -1,48 +1,33 @@
--- First, drop existing policies to start fresh
-DROP POLICY IF EXISTS "Users can view their own profile" ON profiles;
-DROP POLICY IF EXISTS "Users can update their own profile" ON profiles;
-DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON profiles;
+-- Drop all existing policies
+DROP POLICY IF EXISTS "Enable read access for all authenticated users" ON profiles;
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON profiles;
+DROP POLICY IF EXISTS "Enable update for own profile" ON profiles;
+DROP POLICY IF EXISTS "Enable delete for own profile" ON profiles;
+DROP POLICY IF EXISTS "Admins have full access" ON profiles;
+DROP POLICY IF EXISTS "Admin full access" ON profiles;
 
 -- Enable RLS
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
--- Create simplified policies
-CREATE POLICY "Enable read access for authenticated users"
+-- Create policies with proper UPDATE permissions
+CREATE POLICY "Enable read access for all authenticated users"
 ON profiles FOR SELECT
 TO authenticated
-USING (
-  auth.uid() = id OR 
-  EXISTS (
-    SELECT 1 FROM profiles 
-    WHERE id = auth.uid() 
-    AND (role = 'admin' OR role = 'employer')
-  )
-);
+USING (true);
 
 CREATE POLICY "Enable insert for authenticated users"
 ON profiles FOR INSERT
 TO authenticated
 WITH CHECK (auth.uid() = id);
 
-CREATE POLICY "Enable update for users on their own profile"
+CREATE POLICY "Enable update for users own profile"
 ON profiles FOR UPDATE
 TO authenticated
 USING (auth.uid() = id)
 WITH CHECK (auth.uid() = id);
 
--- Special policy for admins
-CREATE POLICY "Admins have full access"
-ON profiles
+CREATE POLICY "Enable delete for own profile"
+ON profiles FOR DELETE
 TO authenticated
-USING (
-  EXISTS (
-    SELECT 1 FROM profiles 
-    WHERE id = auth.uid() AND role = 'admin'
-  )
-)
-WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM profiles 
-    WHERE id = auth.uid() AND role = 'admin'
-  )
-);
+USING (auth.uid() = id);
+

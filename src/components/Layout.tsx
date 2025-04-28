@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, User, Briefcase, Home, Settings, FileText, Building2, Users, Mail, Calendar, Image, UserPlus, Users2, Menu, X, Loader2 } from 'lucide-react';
-import { JobSeekerProfile } from './JobSeekerProfile';
 import { UsersSidebar } from './UsersSidebar';
 import { supabase } from '../services/supabase';
 import type { Profile } from '../types/database';
+import { toast } from 'sonner';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -33,15 +33,42 @@ export function Layout({ children }: LayoutProps) {
   };
 
   useEffect(() => {
-    const handleRoleChange = () => {
-      setIsSwitchingRole(false);
-      // Force a refresh of the profile data
-      fetchProfile();
+    const handleRoleChange = async (event: CustomEvent<{ newRole: string }>) => {
+      if (!user) return;
+
+      try {
+        setIsSwitchingRole(true);
+        
+        // Fetch updated profile
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (profileError) throw profileError;
+
+        setProfile(profileData);
+        
+        // Navigate to appropriate dashboard
+        const dashboardPath = profileData.role === 'employer' 
+          ? '/employer/dashboard'
+          : '/dashboard';
+
+        navigate(dashboardPath, { replace: true });
+        
+        toast.success(`Successfully switched to ${profileData.role.replace('_', ' ')} role`);
+      } catch (error) {
+        toast.error('Failed to complete role switch');
+        console.error('Role change error:', error);
+      } finally {
+        setIsSwitchingRole(false);
+      }
     };
 
-    window.addEventListener('roleChanged', handleRoleChange);
-    return () => window.removeEventListener('roleChanged', handleRoleChange);
-  }, []);
+    window.addEventListener('roleChanged', handleRoleChange as EventListener);
+    return () => window.removeEventListener('roleChanged', handleRoleChange as EventListener);
+  }, [user, navigate]);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -107,9 +134,33 @@ export function Layout({ children }: LayoutProps) {
 
   const navigation = profile?.role === 'employer' ? employerNavigation : jobSeekerNavigation;
 
-  const handleRoleSwitch = () => {
-    setIsSwitchingRole(true);
-    navigate('/select-role');
+  const handleRoleSwitch = async () => {
+    try {
+      setIsSwitchingRole(true);
+      
+      // Verify current role before switching
+      const { data: currentProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+      
+      // Navigate to select role page with current role info
+      navigate('/select-role', { 
+        state: { 
+          previousPath: location.pathname,
+          isRoleSwitch: true,
+          currentRole: currentProfile.role
+        }
+      });
+    } catch (error) {
+      console.error('Error switching role:', error);
+      toast.error('Failed to switch role. Please try again.');
+    } finally {
+      setIsSwitchingRole(false);
+    }
   };
 
   return (
@@ -300,10 +351,6 @@ export function Layout({ children }: LayoutProps) {
     </div>
   );
 } 
-
-
-
-
 
 
 

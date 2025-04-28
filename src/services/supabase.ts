@@ -57,8 +57,3 @@ export const testSupabaseConnection = async () => {
     return false;
   }
 };
-
-
-
-
-

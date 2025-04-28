@@ -265,7 +265,7 @@ export function JobApplicationForm({ jobId, onSuccess, onCancel }: JobApplicatio
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Submitting...' : 'Submit Application'}
+            {isSubmitting ? 'Submitting...' : 'Submit'}
           </Button>
         </div>
       </form>

@@ -4,13 +4,13 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+  throw new Error('Missing environment variables')
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    autoRefreshToken: true,
     persistSession: true,
+    autoRefreshToken: true,
     detectSessionInUrl: true
   },
   realtime: {
@@ -20,13 +20,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
-// Initialize realtime subscriptions
-const channel = supabase.channel('any_channel')
-channel.subscribe((status) => {
-  if (status === 'SUBSCRIBED') {
-    console.log('Realtime connection established')
-  }
-})
+// Remove the channel initialization if not needed
 
 export async function checkEmailVerificationStatus(userId: string) {
   try {
@@ -62,5 +56,3 @@ export async function resendVerificationEmail(email: string) {
     };
   }
 }
-
-

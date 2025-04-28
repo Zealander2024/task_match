@@ -126,10 +126,11 @@ export function UsersSidebar({ onClose }: UsersSidebarProps) {
 
       if (usersError) throw usersError;
 
-      if (!usersData || usersData.length === 0) {
-        console.log('No users found');
-        setError('No users found');
-      }
+      // Remove this condition since empty array is valid
+      // if (!usersData || usersData.length === 0) {
+      //   console.log('No users found');
+      //   setError('No users found');
+      // }
 
       setUsers(usersData || []);
 
@@ -344,13 +345,18 @@ export function UsersSidebar({ onClose }: UsersSidebarProps) {
           <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
             <span className="text-sm font-medium text-gray-600">Show all users</span>
             <button
+              role="switch"
+              aria-checked={showAllUsers}
               onClick={() => setShowAllUsers(!showAllUsers)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                 showAllUsers ? 'bg-blue-600' : 'bg-gray-200'
               }`}
             >
+              <span className="sr-only">
+                {showAllUsers ? 'Show filtered users' : 'Show all users'}
+              </span>
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow ${
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ease-in-out shadow-lg ${
                   showAllUsers ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
@@ -494,3 +500,4 @@ export function UsersSidebar({ onClose }: UsersSidebarProps) {
     </div>
   );
 }
+

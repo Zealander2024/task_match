@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Button } from './ui/button';
-import { Loader2, Shield, ShieldCheck, ShieldAlert, FileText } from 'lucide-react';
+import { Loader2, Shield, ShieldCheck, ShieldAlert, FileText, Upload } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
 
@@ -22,6 +22,15 @@ interface ExtractedData {
   validationResult?: NBIValidationResult;
 }
 
+interface AdminVerificationRequest {
+  user_id: string;
+  document_url: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submitted_at: string;
+  reviewed_at?: string;
+  admin_notes?: string;
+}
+
 export function UserVerification() {
   const { user } = useAuth();
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
@@ -29,6 +38,8 @@ export function UserVerification() {
   const [status, setStatus] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [userProfile, setUserProfile] = useState<{ full_name: string } | null>(null);
+  const [adminVerificationStatus, setAdminVerificationStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
+  const [adminVerificationId, setAdminVerificationId] = useState<string | null>(null);
 
   // Fetch user profile for name matching
   useEffect(() => {
@@ -73,10 +84,10 @@ export function UserVerification() {
 
     // Check if it contains key NBI Clearance indicators
     if (!text.match(/NATIONAL\s+BUREAU\s+OF\s+INVESTIGATION/i)) {
-      validationErrors.push('Document does not appear to be an NBI Clearance');
+      validationErrors.push('Document does not appear to be an NBI Clearance or not edited text pdf file make sure the document is can edited text pdf file');
       result.validationErrors = validationErrors;
       return result;
-    }
+    } 
 
     // Extract NBI Number
     const nbiMatch = text.match(nbiPatterns.nbiNumber);
@@ -150,11 +161,78 @@ export function UserVerification() {
     }
   };
 
-  const handleExtract = useCallback(async () => {
-    if (!selectedFile) {
-      toast.error('Please select a PDF file first');
-      return;
+  // Add function to upload document to Supabase storage
+  const uploadDocumentForAdminReview = async (file: File): Promise<string | null> => {
+    if (!user) return null;
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      // Create a more organized file structure
+      const fileName = `verification-docs/${user.id}/${Date.now()}-nbi.${fileExt}`;
+
+      const { error: uploadError, data } = await supabase.storage
+        .from('verification-documents')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get the public URL for admin review
+      const { data: { publicUrl } } = supabase.storage
+        .from('verification-documents')
+        .getPublicUrl(fileName);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      throw error; // Let the calling function handle the error
     }
+  };
+
+  // Add function to create admin verification request
+  const createAdminVerificationRequest = async (documentUrl: string) => {
+    if (!user) return;
+
+    try {
+      // Check if there's already a pending request
+      const { data: existingRequest } = await supabase
+        .from('admin_verification_requests')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'pending')
+        .single();
+
+      if (existingRequest) {
+        toast.error('You already have a pending verification request');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('admin_verification_requests')
+        .insert({
+          user_id: user.id,
+          document_url: documentUrl,
+          status: 'pending',
+          submitted_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setAdminVerificationId(data.id);
+      setAdminVerificationStatus('pending');
+      toast.success('Document submitted for admin review');
+    } catch (error) {
+      console.error('Error creating admin verification request:', error);
+      throw error; // Let the calling function handle the error
+    }
+  };
+
+  const handleExtract = useCallback(async () => {
+    if (!selectedFile) return;
 
     try {
       setLoading(true);
@@ -187,7 +265,8 @@ export function UserVerification() {
       if (validationResult.isValid && validationResult.nameMatch) {
         await updateVerificationStatus(true);
       } else {
-        await updateVerificationStatus(false);
+        // Don't upload here anymore, just set status to none so user can choose to submit for review
+        setAdminVerificationStatus('none');
       }
 
     } catch (error) {
@@ -198,6 +277,156 @@ export function UserVerification() {
       setStatus('');
     }
   }, [selectedFile, userProfile]);
+
+  const handleSubmitForAdminReview = async () => {
+    if (!selectedFile || !user) return;
+
+    try {
+      setLoading(true);
+      setStatus('Uploading document...');
+
+      // 1. Upload file to Supabase storage bucket
+      const fileExt = selectedFile.name.split('.').pop();
+      const fileName = `verification-docs/${user.id}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('verification-documents')
+        .upload(fileName, selectedFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // 2. Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('verification-documents')
+        .getPublicUrl(fileName);
+
+      // 3. Create verification request for admin review
+      const { error: requestError } = await supabase
+        .from('admin_verification_requests')
+        .insert({
+          user_id: user.id,
+          document_url: publicUrl,
+          status: 'pending',
+          submitted_at: new Date().toISOString()
+        });
+
+      if (requestError) throw requestError;
+
+      // 4. Update UI and show success message
+      setAdminVerificationStatus('pending');
+      setSelectedFile(null);
+      toast.success('Document submitted for admin review');
+
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error('Failed to submit document for review');
+    } finally {
+      setLoading(false);
+      setStatus('');
+    }
+  };
+
+  // Add useEffect to check for existing admin verification requests
+  useEffect(() => {
+    const checkExistingRequests = async () => {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('admin_verification_requests')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('submitted_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (data) {
+        setAdminVerificationId(data.id);
+        setAdminVerificationStatus(data.status);
+      }
+    };
+
+    checkExistingRequests();
+  }, [user]);
+
+  // Add subscription to admin verification updates
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('admin-verification-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'admin_verification_requests',
+          filter: `user_id=eq.${user.id}`
+        },
+        async (payload) => {
+          const newStatus = payload.new.status;
+          setAdminVerificationStatus(newStatus as 'pending' | 'approved' | 'rejected');
+
+          if (newStatus === 'approved') {
+            await updateVerificationStatus(true);
+            toast.success('Your document has been verified by an admin');
+          } else if (newStatus === 'rejected') {
+            toast.error('Your document verification was rejected. Please submit a new document.');
+            // Reset states to allow new submission
+            setSelectedFile(null);
+            setExtractedData(null);
+            setAdminVerificationStatus('none');
+            setAdminVerificationId(null);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  // Add this new function to check existing verification status
+  useEffect(() => {
+    const checkVerificationStatus = async () => {
+      if (!user) return;
+
+      try {
+        // Check if user is already verified
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_verified')
+          .eq('id', user.id)
+          .single();
+
+        if (profile?.is_verified) {
+          setAdminVerificationStatus('approved');
+          return;
+        }
+
+        // Check for existing verification request
+        const { data: request } = await supabase
+          .from('admin_verification_requests')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('submitted_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (request) {
+          setAdminVerificationId(request.id);
+          setAdminVerificationStatus(request.status);
+        }
+      } catch (error) {
+        console.error('Error checking verification status:', error);
+      }
+    };
+
+    checkVerificationStatus();
+  }, [user]);
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -274,26 +503,29 @@ export function UserVerification() {
                 </h4>
               </div>
               
-              <div className="space-y-2 mt-4">
+              <div className="space-y-2">
+                {extractedData.validationResult.validationErrors.map((error, index) => (
+                  <p key={index} className="text-sm text-red-600">
+                    • {error}
+                  </p>
+                ))}
+                
                 {extractedData.validationResult.nbiNumber && (
-                  <p className="text-sm">NBI Number: {extractedData.validationResult.nbiNumber}</p>
-                )}
-                {extractedData.validationResult.dateIssued && (
-                  <p className="text-sm">Date Issued: {extractedData.validationResult.dateIssued}</p>
-                )}
-                {extractedData.validationResult.dateExpiry && (
-                  <p className="text-sm">Valid Until: {extractedData.validationResult.dateExpiry}</p>
+                  <p className="text-sm text-gray-600">
+                    NBI Number: {extractedData.validationResult.nbiNumber}
+                  </p>
                 )}
                 
-                {extractedData.validationResult.validationErrors.length > 0 && (
-                  <div className="mt-4 p-4 bg-red-50 rounded-lg">
-                    <p className="text-sm font-medium text-red-800 mb-2">Validation Errors:</p>
-                    <ul className="list-disc list-inside text-sm text-red-700">
-                      {extractedData.validationResult.validationErrors.map((error, index) => (
-                        <li key={index}>{error}</li>
-                      ))}
-                    </ul>
-                  </div>
+                {extractedData.validationResult.dateIssued && (
+                  <p className="text-sm text-gray-600">
+                    Date Issued: {extractedData.validationResult.dateIssued}
+                  </p>
+                )}
+                
+                {extractedData.validationResult.dateExpiry && (
+                  <p className="text-sm text-gray-600">
+                    Valid Until: {extractedData.validationResult.dateExpiry}
+                  </p>
                 )}
               </div>
             </div>
@@ -306,7 +538,7 @@ export function UserVerification() {
               </div>
               <div className="mt-2">
                 <p className="text-sm text-gray-500 mb-2">
-                  Pages processed: {extractedData.pageCount}
+                  Pages processed...: {extractedData.pageCount}
                 </p>
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
@@ -317,9 +549,77 @@ export function UserVerification() {
             </div>
           </div>
         )}
+
+        {extractedData?.validationResult?.validationErrors.length > 0 && (
+          <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
+            <div className="mb-4">
+              <h4 className="text-lg font-semibold text-red-600">AI Validation Errors</h4>
+              <ul className="list-disc list-inside text-sm text-red-700 mt-2">
+                {extractedData.validationResult.validationErrors.map((error, index) => (
+                  <li key={index}>{error}</li>
+                ))}
+              </ul>
+            </div>
+
+            {adminVerificationStatus === 'none' && (
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  Would you like to submit this document for manual review by our admin team?
+                </p>
+                <Button
+                  onClick={handleSubmitForAdminReview}
+                  disabled={loading}
+                  className="bg-blue-500 hover:bg-blue-600"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    'Submit for Admin Review'
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {adminVerificationStatus === 'pending' && (
+              <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-yellow-500" />
+                  <p className="text-sm text-yellow-700">
+                    Your document is being reviewed by our admin team. We'll notify you once the review is complete.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {adminVerificationStatus === 'rejected' && (
+              <div className="mt-4 p-4 bg-red-50 rounded-lg">
+                <p className="text-sm text-red-700 mb-2">
+                  Your document was rejected by our admin team. Please submit a new document.
+                </p>
+                <Button
+                  onClick={() => {
+                    setSelectedFile(null);
+                    setExtractedData(null);
+                    setAdminVerificationStatus('none');
+                    setAdminVerificationId(null);
+                  }}
+                  variant="destructive"
+                >
+                  Upload New Document
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
+
+
 
 

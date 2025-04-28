@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { UserPlus, Check, X, Eye, EyeOff, AlertCircle, Mail } from 'lucide-react';
+import { UserPlus, Check, X, Eye, EyeOff, AlertCircle, Mail, Lock, ArrowRight, User } from 'lucide-react';
 import zxcvbn from 'zxcvbn';
 import { supabase } from '../services/supabase';
 import { toast } from 'sonner'; // Add toast for better notifications
+import { motion, AnimatePresence } from 'framer-motion';
 
 export function SignUp() {
   const [email, setEmail] = useState('');
@@ -17,6 +18,50 @@ export function SignUp() {
   const [passwordScore, setPasswordScore] = useState(0);
   const [passwordFeedback, setPasswordFeedback] = useState<string[]>([]);
   const navigate = useNavigate();
+
+  // Add new state for typing animation
+  const [displayedText, setDisplayedText] = useState('');
+  const instructionText = `Welcome to our platform! 👋
+
+Before you begin, please note:
+
+1️⃣ Use your real full name
+   • Required for identity verification
+   • Will be used for professional networking
+
+2️⃣ Work email preferred
+   • Helps verify your professional status
+   • Ensures secure communication
+
+3️⃣ Strong password required
+   • Protects your professional identity
+   • Ensure verification increases trust
+   • Real credentials enhance networking
+
+5️⃣ Next steps:
+   • Complete your profile
+   • Add professional skills
+   • Connect with peers
+
+We're excited to have you join us! 🚀es account security
+
+4️⃣ Important to know:
+   • Our AI system will verify your identity
+   • Profile`;
+
+  useEffect(() => {
+    let currentIndex = 0;
+    const intervalId = setInterval(() => {
+      if (currentIndex <= instructionText.length) {
+        setDisplayedText(instructionText.slice(0, currentIndex));
+        currentIndex++;
+      } else {
+        clearInterval(intervalId);
+      }
+    }, 30); // Adjust speed here (lower = faster)
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   const passwordRequirements = [
     { regex: /.{8,}/, text: 'At least 8 characters long' },
@@ -110,9 +155,12 @@ export function SignUp() {
           {
             id: data.user.id,
             full_name: fullName,
-            email: email.trim().toLowerCase(),
+            work_email: email.trim().toLowerCase(), // Changed to work_email to match schema
             created_at: new Date().toISOString(),
-            profile_completed: false
+            updated_at: new Date().toISOString(),
+            profile_completed: false,
+            is_verified: false,
+            skills: [] // Initialize empty skills array
           }
         ]);
 
@@ -127,7 +175,7 @@ export function SignUp() {
       if (signInError) throw signInError;
 
       toast.success('Account created successfully!');
-      navigate('/select-role');
+      navigate('/create-profile');
 
     } catch (err) {
       console.error('Signup error:', err);
@@ -156,177 +204,251 @@ export function SignUp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 animate-gradient-shift">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <UserPlus className="h-12 w-12 text-blue-600 animate-bounce" />
-        </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Create your account
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Already have an account?{' '}
-          <Link to="/signin" className="font-medium text-blue-600 hover:text-blue-500">
-            Sign in
-          </Link>
-        </p>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow-2xl shadow-blue-500/10 sm:rounded-lg sm:px-10 transition-all duration-300 hover:shadow-blue-500/20">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {error && (
-              <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded animate-shake">
-                <div className="flex">
-                  <AlertCircle className="h-5 w-5 text-red-400" />
-                  <p className="ml-3 text-sm text-red-700">{error}</p>
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
-                Full Name
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <input
-                  id="fullName"
-                  name="fullName"
-                  type="text"
-                  autoComplete="name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="John Doe"
-                />
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="flex w-full max-w-7xl gap-12 items-center justify-center">
+        {/* Sign Up Form - Left Side */}
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="flex justify-center">
+              <div className="p-4 bg-blue-100 rounded-full transform hover:scale-105 transition-transform duration-300">
+                <UserPlus className="h-12 w-12 text-blue-600" />
               </div>
             </div>
+            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+              Create your account
+            </h2>
+            <p className="mt-2 text-center text-sm text-gray-600">
+              Join our professional network
+            </p>
+          </div>
 
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="you@example.com"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-gray-400" />
-                  )}
-                </button>
-              </div>
-              
-              {/* Password strength indicator */}
-              {password && (
-                <div className="mt-2">
-                  <div className="flex space-x-1">
-                    {[0, 1, 2, 3].map((index) => (
-                      <div
-                        key={index}
-                        className={`h-2 w-1/4 rounded-full ${
-                          index <= passwordScore ? getPasswordStrengthColor() : 'bg-gray-200'
-                        }`}
-                      />
-                    ))}
+          <div className="bg-white/80 backdrop-blur-lg p-8 rounded-2xl shadow-2xl shadow-blue-500/10 hover:shadow-blue-500/20 transition-all duration-300">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded-lg animate-shake">
+                  <div className="flex items-center">
+                    <AlertCircle className="h-5 w-5 text-red-400" />
+                    <p className="ml-3 text-sm text-red-700">{error}</p>
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Password strength: {['Very Weak', 'Weak', 'Fair', 'Strong'][passwordScore]}
-                  </p>
                 </div>
               )}
 
-              {/* Password requirements */}
-              <div className="mt-2 space-y-2">
-                {passwordRequirements.map((req, index) => (
-                  <div key={index} className="flex items-center text-sm">
-                    {req.regex.test(password) ? (
-                      <Check className="h-4 w-4 text-green-500 mr-2" />
-                    ) : (
-                      <X className="h-4 w-4 text-red-500 mr-2" />
-                    )}
-                    <span className={req.regex.test(password) ? 'text-green-700' : 'text-gray-500'}>
-                      {req.text}
-                    </span>
+              {/* Full Name Input */}
+              <div className="space-y-2">
+                <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
+                  Full Name
+                </label>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <User className="h-5 w-5 text-gray-400" />
                   </div>
-                ))}
+                  <input
+                    id="fullName"
+                    name="fullName"
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="appearance-none block w-full pl-10 px-3 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="John Doe"
+                  />
+                </div>
               </div>
+
+              {/* Email Input */}
+              <div className="space-y-2">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  Work Email
+                </label>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="appearance-none block w-full pl-10 px-3 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="you@company.com"
+                  />
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div className="space-y-2">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Password
+                </label>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="appearance-none block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <Eye className="h-5 w-5 text-gray-400" />
+                    )}
+                  </button>
+                </div>
+                
+                {/* Password Strength Indicator */}
+                {password && (
+                  <div className="mt-2">
+                    <div className="flex h-2 overflow-hidden rounded-full bg-gray-200">
+                      <div
+                        className={`transition-all duration-300 ${getPasswordStrengthColor()}`}
+                        style={{ width: `${(passwordScore + 1) * 20}%` }}
+                      />
+                    </div>
+                    <div className="mt-2">
+                      {passwordRequirements.map((req, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center text-sm"
+                        >
+                          {req.regex.test(password) ? (
+                            <Check className="h-4 w-4 text-green-500 mr-2" />
+                          ) : (
+                            <X className="h-4 w-4 text-gray-300 mr-2" />
+                          )}
+                          <span className={req.regex.test(password) ? 'text-green-700' : 'text-gray-500'}>
+                            {req.text}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Confirm Password Input */}
+              <div className="space-y-2">
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                  Confirm Password
+                </label>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="appearance-none block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:-translate-y-1"
+                >
+                  {loading ? (
+                    <span className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Creating account...
+                    </span>
+                  ) : (
+                    <span className="flex items-center">
+                      Create account
+                      <ArrowRight className="ml-2 h-5 w-5" />
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* Sign In Link */}
+              <div className="text-center">
+                <Link
+                  to="/signin"
+                  className="text-sm text-blue-600 hover:text-blue-500 font-medium"
+                >
+                  Already have an account? Sign in
+                </Link>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {/* Instructions Panel - Right Side */}
+        <div className="hidden lg:block w-full max-w-md">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="bg-white/80 backdrop-blur-lg p-8 rounded-2xl shadow-2xl shadow-blue-500/10 hover:shadow-blue-500/20 transition-all duration-300"
+          >
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="h-8 w-2 bg-blue-600 rounded-full animate-pulse" />
+              <h3 className="text-2xl font-bold text-gray-900">Getting Started</h3>
             </div>
 
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm Password
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            <div className="prose prose-blue">
+              <div className="font-mono text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+                {displayedText}
+                <motion.span
+                  animate={{ opacity: [1, 0] }}
+                  transition={{ duration: 0.8, repeat: Infinity }}
+                  className="inline-block w-2 h-4 bg-blue-500 ml-1"
                 />
               </div>
             </div>
 
-            <div>
-              <button
-                type="submit"
-                disabled={loading || passwordScore < 3}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:-translate-y-1"
-              >
-                {loading ? (
-                  <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Creating account...
-                  </span>
-                ) : (
-                  'Create Account'
-                )}
-              </button>
+            <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-100">
+              <div className="flex items-center space-x-3">
+                <div className="flex-shrink-0">
+                  <AlertCircle className="h-5 w-5 text-blue-500" />
+                </div>
+                <p className="text-sm text-blue-700">
+                  Our AI verification system helps maintain a trusted professional network.
+                </p>
+              </div>
             </div>
-          </form>
+
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 2 }}
+              className="mt-6 flex items-center justify-center space-x-2 text-sm text-gray-500"
+            >
+              <Check className="h-4 w-4 text-green-500" />
+              <span>Trusted by professionals worldwide</span>
+            </motion.div>
+          </motion.div>
         </div>
       </div>
     </div>
   );
 }
+
+
 
 

@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
-import { Trash2, Edit, Eye, X } from 'lucide-react';
-import * as Dialog from '@radix-ui/react-dialog';
+import { Trash2, Edit, X, Search, Filter } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '../../components/ui/dialog';
 import { format } from 'date-fns';
 import { JobPost } from '../../types/database';
 import { Badge } from '../../components/ui/badge';
 import { toast } from '../../components/ui/use-toast';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Textarea } from '../../components/ui/textarea';
+import { useAdminAuth } from '../../context/AdminAuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface JobPostFormData {
   title: string;
@@ -19,7 +24,17 @@ interface JobPostFormData {
   status: 'active' | 'deleted' | 'draft';
 }
 
+interface SearchFilters {
+  query: string;
+  status: 'all' | 'active' | 'deleted' | 'draft';
+  datePosted: string;
+  jobType: string;
+  location: string;
+}
+
 export function JobPostManagement() {
+  const { isAdmin, loading: authLoading } = useAdminAuth();
+  const navigate = useNavigate();
   const [jobPosts, setJobPosts] = useState<JobPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -35,18 +50,65 @@ export function JobPostManagement() {
     required_skills: [],
     status: 'active'
   });
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({
+    query: '',
+    status: 'all',
+    datePosted: '',
+    jobType: '',
+    location: ''
+  });
 
-  useEffect(() => {
-    fetchJobPosts();
-  }, []);
+  const buildSearchQuery = useCallback(() => {
+    let query = supabase
+      .from('job_posts')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  async function fetchJobPosts() {
+    // Apply search filters
+    if (searchFilters.query) {
+      query = query.or(`
+        title.ilike.%${searchFilters.query}%,
+        description.ilike.%${searchFilters.query}%,
+        company_name.ilike.%${searchFilters.query}%
+      `);
+    }
+
+    if (searchFilters.status !== 'all') {
+      query = query.eq('status', searchFilters.status);
+    }
+
+    if (searchFilters.jobType) {
+      query = query.eq('job_type', searchFilters.jobType);
+    }
+
+    if (searchFilters.location) {
+      query = query.ilike('location', `%${searchFilters.location}%`);
+    }
+
+    if (searchFilters.datePosted) {
+      const date = new Date();
+      switch (searchFilters.datePosted) {
+        case 'today':
+          date.setDate(date.getDate() - 1);
+          break;
+        case 'week':
+          date.setDate(date.getDate() - 7);
+          break;
+        case 'month':
+          date.setMonth(date.getMonth() - 1);
+          break;
+      }
+      query = query.gte('created_at', date.toISOString());
+    }
+
+    return query;
+  }, [searchFilters]);
+
+  const fetchJobPosts = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('job_posts')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const query = buildSearchQuery();
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -61,7 +123,19 @@ export function JobPostManagement() {
     } finally {
       setLoading(false);
     }
-  }
+  };
+
+  useEffect(() => {
+    if (!authLoading && isAdmin) {
+      fetchJobPosts();
+    }
+  }, [isAdmin, authLoading, searchFilters]);
+
+  useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      navigate('/admin/login');
+    }
+  }, [isAdmin, authLoading, navigate]);
 
   async function handleDelete(jobId: string) {
     if (!window.confirm('Are you sure you want to delete this job post?')) return;
@@ -74,7 +148,6 @@ export function JobPostManagement() {
 
       if (error) throw error;
 
-      // Optimistically update the UI
       setJobPosts(prev => 
         prev.map(post => 
           post.id === jobId ? { ...post, status: 'deleted' } : post
@@ -105,7 +178,7 @@ export function JobPostManagement() {
       job_type: jobPost.job_type,
       budget: jobPost.budget,
       work_schedule: jobPost.work_schedule,
-      required_skills: jobPost.required_skills,
+      required_skills: jobPost.required_skills || [],
       status: jobPost.status as 'active' | 'deleted' | 'draft'
     });
     setIsEditModalOpen(true);
@@ -113,7 +186,7 @@ export function JobPostManagement() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
+    
     if (!selectedJobPost?.id) {
       toast({
         title: "Error",
@@ -138,7 +211,6 @@ export function JobPostManagement() {
 
       if (error) throw error;
 
-      // Update the local state
       setJobPosts(prev => 
         prev.map(post => 
           post.id === selectedJobPost.id ? { ...post, ...updateData } : post
@@ -164,8 +236,12 @@ export function JobPostManagement() {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
+  if (!isAdmin) {
+    return null;
+  }
+
   return (
-    <div className="px-4 sm:px-6 lg:px-8 min-h-screen transition-colors duration-200 dark:bg-gray-900 dark:text-white">
+    <div className="space-y-6 p-8">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Job Post Management</h1>
@@ -175,193 +251,227 @@ export function JobPostManagement() {
         </div>
       </div>
 
-      <div className="mt-8 flex flex-col">
-        <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 rounded-lg">
-              <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Job Details</th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Company</th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Location</th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Status</th>
-                    <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Posted</th>
-                    <th className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
-                  {jobPosts.map((post) => (
-                    <tr key={post.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <td className="px-3 py-4">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-gray-900 dark:text-white">{post.title}</span>
-                          <span className="text-gray-500 dark:text-gray-400">{post.job_type}</span>
-                          <span className="text-gray-500 dark:text-gray-400">{post.budget}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">{post.company_name}</td>
-                      <td className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">{post.location}</td>
-                      <td className="px-3 py-4 text-sm">
-                        <Badge
-                          variant={post.status === 'active' ? 'default' : 'secondary'}
-                          className="dark:bg-gray-700 dark:text-gray-200"
-                        >
-                          {post.status}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {format(new Date(post.created_at), 'MMM d, yyyy')}
-                      </td>
-                      <td className="relative py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                        <button
-                          onClick={() => handleEdit(post)}
-                          className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4"
-                        >
-                          <Edit className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(post.id)}
-                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                        >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {/* Search and Filter Section */}
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="flex-1">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search job posts..."
+              value={searchFilters.query}
+              onChange={(e) => setSearchFilters(prev => ({ ...prev, query: e.target.value }))}
+              className="pl-10"
+            />
           </div>
+        </div>
+        <div className="flex gap-2">
+          <select
+            value={searchFilters.status}
+            onChange={(e) => setSearchFilters(prev => ({ 
+              ...prev, 
+              status: e.target.value as SearchFilters['status']
+            }))}
+            className="rounded-md border-gray-300 dark:border-gray-700"
+          >
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="deleted">Deleted</option>
+            <option value="draft">Draft</option>
+          </select>
+          <select
+            value={searchFilters.datePosted}
+            onChange={(e) => setSearchFilters(prev => ({ ...prev, datePosted: e.target.value }))}
+            className="rounded-md border-gray-300 dark:border-gray-700"
+          >
+            <option value="">Any Time</option>
+            <option value="today">Last 24 Hours</option>
+            <option value="week">Last Week</option>
+            <option value="month">Last Month</option>
+          </select>
+          <select
+            value={searchFilters.jobType}
+            onChange={(e) => setSearchFilters(prev => ({ ...prev, jobType: e.target.value }))}
+            className="rounded-md border-gray-300 dark:border-gray-700"
+          >
+            <option value="">All Job Types</option>
+            <option value="full-time">Full Time</option>
+            <option value="part-time">Part Time</option>
+            <option value="contract">Contract</option>
+            <option value="internship">Internship</option>
+          </select>
+          <Input
+            placeholder="Location..."
+            value={searchFilters.location}
+            onChange={(e) => setSearchFilters(prev => ({ ...prev, location: e.target.value }))}
+            className="w-32"
+          />
         </div>
       </div>
 
-      <Dialog.Root open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/30 dark:bg-black/50" />
-          <Dialog.Content className="fixed inset-0 z-10 overflow-y-auto">
-            <div className="flex min-h-screen items-center justify-center p-4">
-              <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full p-6 shadow-lg">
-                <Dialog.Title className="text-lg font-semibold mb-4">
-                  Edit Job Post
-                </Dialog.Title>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
-                    <input
-                      type="text"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      required
-                    />
+      <div className="mt-8 overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 rounded-lg">
+        <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-800">
+            <tr>
+              <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Job Details</th>
+              <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Company</th>
+              <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Location</th>
+              <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Status</th>
+              <th className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Posted</th>
+              <th className="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+            {jobPosts.map((post) => (
+              <tr key={post.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                <td className="px-3 py-4">
+                  <div className="flex flex-col">
+                    <span className="font-medium text-gray-900 dark:text-white">{post.title}</span>
+                    <span className="text-gray-500 dark:text-gray-400">{post.job_type}</span>
+                    <span className="text-gray-500 dark:text-gray-400">{post.budget}</span>
                   </div>
+                </td>
+                <td className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">{post.company_name}</td>
+                <td className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">{post.location}</td>
+                <td className="px-3 py-4 text-sm">
+                  <Badge
+                    variant={post.status === 'active' ? 'default' : 'secondary'}
+                    className="dark:bg-gray-700 dark:text-gray-200"
+                  >
+                    {post.status}
+                  </Badge>
+                </td>
+                <td className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                  {format(new Date(post.created_at), 'MMM d, yyyy')}
+                </td>
+                <td className="relative py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                  <Button
+                    onClick={() => handleEdit(post)}
+                    variant="ghost"
+                    className="mr-2"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    onClick={() => handleDelete(post.id)}
+                    variant="ghost"
+                    className="text-red-600 hover:text-red-900"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-                    <textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      rows={4}
-                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Company Name</label>
-                      <input
-                        type="text"
-                        value={formData.company_name}
-                        onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Location</label>
-                      <input
-                        type="text"
-                        value={formData.location}
-                        onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Job Type</label>
-                      <input
-                        type="text"
-                        value={formData.job_type}
-                        onChange={(e) => setFormData({ ...formData, job_type: e.target.value })}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Budget</label>
-                      <input
-                        type="text"
-                        value={formData.budget}
-                        onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'deleted' | 'draft' })}
-                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    >
-                      <option value="active">Active</option>
-                      <option value="draft">Draft</option>
-                      <option value="deleted">Deleted</option>
-                    </select>
-                  </div>
-
-                  <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setIsEditModalOpen(false)}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
-                    >
-                      Save Changes
-                    </button>
-                  </div>
-                </form>
-
-                <button
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="absolute top-4 right-4 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-                >
-                  <X className="h-5 w-5" />
-                </button>
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Job Post</DialogTitle>
+            <DialogClose asChild>
+              <Button variant="ghost" className="h-4 w-4 p-0">
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogClose>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium">Title</label>
+              <Input
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Description</label>
+              <Textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium">Name</label>
+                <Input
+                  value={formData.company_name}
+                  onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Location</label>
+                <Input
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  required
+                />
               </div>
             </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium">Job Type</label>
+                <Input
+                  value={formData.job_type}
+                  onChange={(e) => setFormData({ ...formData, job_type: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Budget</label>
+                <Input
+                  value={formData.budget}
+                  onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Work Schedule</label>
+              <Input
+                value={formData.work_schedule}
+                onChange={(e) => setFormData({ ...formData, work_schedule: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Required Skills (comma-separated)</label>
+              <Input
+                value={formData.required_skills.join(', ')}
+                onChange={(e) => setFormData({ ...formData, required_skills: e.target.value.split(',').map(s => s.trim()) })}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Status</label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'deleted' | 'draft' })}
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-800"
+              >
+                <option value="active">Active</option>
+                <option value="draft">Draft</option>
+                <option value="deleted">Deleted</option>
+              </select>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                Save Changes
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-
 
 
 

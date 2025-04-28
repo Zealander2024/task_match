@@ -9,7 +9,9 @@ import {
   Bell,
   LogOut,
   User,
-  BarChart
+  BarChart,
+  ShieldCheck,
+  ClipboardList  // Add this import for the applications icon
 } from 'lucide-react';
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -22,6 +24,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     { name: 'Employers', href: '/admin/employers', icon: Briefcase },
     { name: 'Job Seekers', href: '/admin/job-seekers', icon: Users },
     { name: 'Job Posts', href: '/admin/job-posts', icon: FileText },
+    // Add new navigation item for Job Applications
+    { name: 'Applications', href: '/admin/applications', icon: ClipboardList },
+    { name: 'User Verification', href: '/admin/verification', icon: ShieldCheck },
     { name: 'Reports', href: '/admin/reports', icon: BarChart },
     { name: 'Profile', href: '/admin/profile', icon: User },
     { name: 'Settings', href: '/admin/settings', icon: Settings },
@@ -96,5 +101,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
+
+
 
 

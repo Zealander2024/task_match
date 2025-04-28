@@ -11,6 +11,8 @@ CREATE TABLE profiles (
     skills TEXT[],
     avatar_url TEXT,
     resume_url TEXT,
+    profile_completed BOOLEAN DEFAULT false,
+    is_verified BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

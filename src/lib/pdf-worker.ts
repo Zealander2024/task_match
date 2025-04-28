@@ -7,4 +7,3 @@ const workerSrc = new URL(
 ).toString();
 
 GlobalWorkerOptions.workerSrc = workerSrc;
-

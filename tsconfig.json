@@ -1,7 +1,9 @@
 {
-  "files": [],
-  "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
-  ]
-}
+  "compilerOptions": {
+    "jsx": "react",
+    // ... other options ...
+    "paths": {
+      "pdfjs-dist": ["./node_modules/pdfjs-dist/types/src/pdf.d.ts"]
+    }
+  }
+  }
