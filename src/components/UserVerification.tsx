@@ -44,7 +44,187 @@ interface AdminVerificationRequest {
 // Extraction method types
 type ExtractionMethod = 'pdfjs' | 'ocr';
 
-// Improved OCR extraction with better image preprocessing
+// Create a separate function for the image handling outside of the block
+const handleImageWithOCR = async (file: File, setStatus: React.Dispatch<React.SetStateAction<string>>, setFilePreviewUrl: React.Dispatch<React.SetStateAction<string | null>>): Promise<{text: string, pageCount: number, debug?: any}> => {
+  setStatus('Processing image with enhanced OCR...');
+  
+  // Create URL for the image preview
+  const imageUrl = URL.createObjectURL(file);
+  setFilePreviewUrl(imageUrl);
+  
+  // Create an image element for preprocessing
+  const img = new Image();
+  img.crossOrigin = 'Anonymous';
+  
+  // Wait for the image to load
+  await new Promise((resolve) => {
+    img.onload = resolve;
+    img.src = imageUrl;
+  });
+  
+  // Create canvas for preprocessing
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  
+  if (!ctx) {
+    throw new Error('Could not create canvas context for image preprocessing');
+  }
+  
+  // Draw the image and apply preprocessing
+  ctx.drawImage(img, 0, 0);
+  let debugInfo = [];
+  
+  try {
+    // Apply advanced preprocessing similar to PDF processing
+    // Get the image data
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    // Step 1: Convert to grayscale
+    for (let i = 0; i < data.length; i += 4) {
+      // Weighted grayscale conversion
+      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      data[i] = gray;
+      data[i + 1] = gray;
+      data[i + 2] = gray;
+    }
+    
+    // Step 2: Calculate histogram for adaptive thresholding
+    const histogram = new Array(256).fill(0);
+    for (let i = 0; i < data.length; i += 4) {
+      histogram[Math.floor(data[i])]++;
+    }
+    
+    // Step 3: Find the optimal threshold using Otsu's method
+    let sum = 0;
+    for (let i = 0; i < 256; i++) {
+      sum += i * histogram[i];
+    }
+    
+    let sumB = 0;
+    let wB = 0;
+    let wF = 0;
+    let maxVariance = 0;
+    let threshold = 0;
+    const total = data.length / 4;
+    
+    for (let t = 0; t < 256; t++) {
+      wB += histogram[t];
+      if (wB === 0) continue;
+      
+      wF = total - wB;
+      if (wF === 0) break;
+      
+      sumB += t * histogram[t];
+      const mB = sumB / wB;
+      const mF = (sum - sumB) / wF;
+      
+      const variance = wB * wF * Math.pow(mB - mF, 2);
+      
+      if (variance > maxVariance) {
+        maxVariance = variance;
+        threshold = t;
+      }
+    }
+    
+    // Step 4: Apply adaptive thresholding and increase contrast
+    for (let i = 0; i < data.length; i += 4) {
+      // Apply threshold with a small bias to enhance text
+      const val = data[i] < (threshold + 10) ? 0 : 255;
+      data[i] = val;
+      data[i + 1] = val;
+      data[i + 2] = val;
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+  } catch (preprocessingError) {
+    console.warn('Advanced image preprocessing failed, reverting to basic preprocessing:', preprocessingError);
+    
+    // Fall back to simple thresholding if advanced fails
+    try {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      
+      // Simple contrast enhancement
+      for (let i = 0; i < data.length; i += 4) {
+        // Convert to grayscale with improved contrast
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const newVal = avg > 140 ? 255 : 0; // Thresholding
+        
+        data[i] = newVal;     // r
+        data[i + 1] = newVal; // g
+        data[i + 2] = newVal; // b
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+    } catch (basicError) {
+      console.error('Basic preprocessing also failed:', basicError);
+    }
+  }
+  
+  // Get the processed image data
+  const processedImageUrl = canvas.toDataURL('image/png');
+  setFilePreviewUrl(processedImageUrl);
+  
+  // Set a timeout to prevent OCR from hanging
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('OCR timed out')), 60000); // 60 second timeout
+  });
+  
+  try {
+    // Initialize Tesseract with advanced settings and progress reporting
+    const worker = await createWorker('eng', 1, {
+      logger: progress => {
+        if (progress.status === 'recognizing text') {
+          setStatus(`OCR progress: ${Math.round(progress.progress * 100)}%`);
+        }
+      }
+    });
+    
+    // Advanced configuration for Tesseract
+    await worker.setParameters({
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-/.:,\'() ',
+      tessjs_create_hocr: '0',
+      tessjs_create_tsv: '0',
+      // Use string values to avoid type errors
+      tessedit_ocr_engine_mode: '3', // Use LSTM engine only for better accuracy
+      tessedit_pageseg_mode: '6', // Assume uniform block of text
+      textord_heavy_nr: '1', // Heavy noise removal
+      textord_min_linesize: '3.0', // Helps with smaller text
+    });
+    
+    // Extract text with timeout
+    const { data } = await Promise.race([
+      worker.recognize(canvas),
+      timeoutPromise
+    ]) as any;
+    
+    const extractedText = data.text;
+    
+    // Store debug data
+    debugInfo.push({
+      page: 1,
+      text: data.text,
+      confidence: data.confidence,
+      wordConfidences: data.words ? data.words.map(w => ({ word: w.text, confidence: w.confidence })) : []
+    });
+    
+    // Clean up
+    await worker.terminate();
+    
+    return {
+      text: extractedText,
+      pageCount: 1,
+      debug: debugInfo
+    };
+  } catch (ocrError) {
+    console.error('OCR processing error:', ocrError);
+    throw ocrError;
+  }
+};
+
 function extractTextWithOCR(setStatus: React.Dispatch<React.SetStateAction<string>>, setFilePreviewUrl: React.Dispatch<React.SetStateAction<string | null>>) {
   return async (file: File): Promise<{text: string, pageCount: number, debug?: any}> => {
     let extractedText = '';
@@ -65,11 +245,12 @@ function extractTextWithOCR(setStatus: React.Dispatch<React.SetStateAction<strin
         for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
           setStatus(`Processing PDF page ${pageNum} of ${pdfDoc.numPages} with OCR...`);
           
+          try {
           // Render the PDF page to a canvas with improved resolution
           const page = await pdfDoc.getPage(pageNum);
-          const viewport = page.getViewport({ scale: 3.0 }); // Increased scale for better quality
+            const viewport = page.getViewport({ scale: 4.0 }); // Increased scale for better quality
           const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
+            const context = canvas.getContext('2d', { willReadFrequently: true });
           
           if (!context) {
             throw new Error('Could not create canvas context for OCR processing');
@@ -83,9 +264,115 @@ function extractTextWithOCR(setStatus: React.Dispatch<React.SetStateAction<strin
             viewport: viewport
           }).promise;
           
-          // Image preprocessing for better OCR results
+            // Advanced image preprocessing for better OCR results
           try {
-            // Increase contrast and apply thresholding for better text detection
+              // Get the image data
+              const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+              const data = imageData.data;
+              
+              // Step 1: Convert to grayscale
+              for (let i = 0; i < data.length; i += 4) {
+                // Weighted grayscale conversion (human eye is more sensitive to green)
+                const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                data[i] = gray;
+                data[i + 1] = gray;
+                data[i + 2] = gray;
+              }
+              
+              // Step 2: Calculate histogram for adaptive thresholding
+              const histogram = new Array(256).fill(0);
+              for (let i = 0; i < data.length; i += 4) {
+                histogram[Math.floor(data[i])]++;
+              }
+              
+              // Step 3: Find the optimal threshold using Otsu's method
+              let sum = 0;
+              for (let i = 0; i < 256; i++) {
+                sum += i * histogram[i];
+              }
+              
+              let sumB = 0;
+              let wB = 0;
+              let wF = 0;
+              let maxVariance = 0;
+              let threshold = 0;
+              const total = data.length / 4;
+              
+              for (let t = 0; t < 256; t++) {
+                wB += histogram[t];
+                if (wB === 0) continue;
+                
+                wF = total - wB;
+                if (wF === 0) break;
+                
+                sumB += t * histogram[t];
+                const mB = sumB / wB;
+                const mF = (sum - sumB) / wF;
+                
+                const variance = wB * wF * Math.pow(mB - mF, 2);
+                
+                if (variance > maxVariance) {
+                  maxVariance = variance;
+                  threshold = t;
+                }
+              }
+              
+              // Step 4: Apply adaptive thresholding and increase contrast
+              for (let i = 0; i < data.length; i += 4) {
+                // Apply threshold with a small bias to enhance text
+                const val = data[i] < (threshold + 10) ? 0 : 255;
+                data[i] = val;
+                data[i + 1] = val;
+                data[i + 2] = val;
+              }
+              
+              // Step 5: Noise removal - remove isolated pixels
+              const tempData = new Uint8ClampedArray(data.length);
+              tempData.set(data);
+              
+              // Only apply to smaller images to avoid performance issues
+              if (canvas.width < 2000 && canvas.height < 2000) {
+                for (let y = 1; y < canvas.height - 1; y++) {
+                  for (let x = 1; x < canvas.width - 1; x++) {
+                    const idx = (y * canvas.width + x) * 4;
+                    const isBlack = data[idx] === 0;
+                    
+                    // Check surrounding pixels
+                    let surroundingBlackCount = 0;
+                    for (let yy = -1; yy <= 1; yy++) {
+                      for (let xx = -1; xx <= 1; xx++) {
+                        if (xx === 0 && yy === 0) continue;
+                        const nidx = ((y + yy) * canvas.width + (x + xx)) * 4;
+                        if (data[nidx] === 0) surroundingBlackCount++;
+                      }
+                    }
+                    
+                    // Remove isolated black pixels (noise)
+                    if (isBlack && surroundingBlackCount < 2) {
+                      tempData[idx] = 255;
+                      tempData[idx + 1] = 255;
+                      tempData[idx + 2] = 255;
+                    }
+                    
+                    // Remove isolated white pixels in text
+                    if (!isBlack && surroundingBlackCount > 6) {
+                      tempData[idx] = 0;
+                      tempData[idx + 1] = 0;
+                      tempData[idx + 2] = 0;
+                    }
+                  }
+                }
+                
+                // Copy the filtered data back
+                data.set(tempData);
+              }
+              
+              context.putImageData(imageData, 0, 0);
+            } catch (preprocessingError) {
+              console.warn('Advanced image preprocessing failed, reverting to basic preprocessing:', preprocessingError);
+              
+              // Fall back to simple thresholding if advanced fails
+              try {
             const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
             
@@ -101,8 +388,9 @@ function extractTextWithOCR(setStatus: React.Dispatch<React.SetStateAction<strin
             }
             
             context.putImageData(imageData, 0, 0);
-          } catch (preprocessingError) {
-            console.warn('Image preprocessing failed, proceeding with original image:', preprocessingError);
+              } catch (basicError) {
+                console.error('Basic preprocessing also failed:', basicError);
+              }
           }
           
           // Get image data from canvas
@@ -112,32 +400,59 @@ function extractTextWithOCR(setStatus: React.Dispatch<React.SetStateAction<strin
           // Initialize Tesseract with better configuration
           setStatus(`Running OCR on page ${pageNum} with advanced settings...`);
           
-          // Create a new worker with improved configuration
-          const worker = await createWorker('eng');
+            // Create a new worker with improved configuration and timeout handling
+            const worker = await createWorker('eng', 1, {
+              logger: progress => {
+                if (progress.status === 'recognizing text') {
+                  setStatus(`OCR progress: ${Math.round(progress.progress * 100)}%`);
+                }
+              }
+            });
+            
+            // Set a timeout to prevent OCR from hanging
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('OCR timed out')), 60000); // 60 second timeout
+            });
           
           // Advanced configuration for Tesseract
           await worker.setParameters({
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-/.: ',
+              tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-/.:,\'() ',
             tessjs_create_hocr: '0',
             tessjs_create_tsv: '0',
+              // Use string values to avoid type errors
+              tessedit_ocr_engine_mode: '3', // Use LSTM engine only for better accuracy
+              tessedit_pageseg_mode: '6', // Assume uniform block of text
+              textord_heavy_nr: '1', // Heavy noise removal
+              textord_min_linesize: '3.0', // Helps with smaller text
           });
           
-          // Extract text
-          const { data } = await worker.recognize(imageData);
+            // Extract text with timeout
+            const { data } = await Promise.race([
+              worker.recognize(imageData),
+              timeoutPromise
+            ]) as any;
+            
           extractedText += data.text + '\n';
           
           // Store debug data
           debugData.push({
             page: pageNum,
             text: data.text,
-            confidence: data.confidence
+              confidence: data.confidence,
+              wordConfidences: data.words ? data.words.map(w => ({ word: w.text, confidence: w.confidence })) : []
           });
           
           // Clean up
           await worker.terminate();
+          } catch (pageError) {
+            console.error(`Error processing page ${pageNum}:`, pageError);
+            toast.error(`Error on page ${pageNum}: ${pageError.message}`);
+            // Continue with next page instead of failing completely
+            extractedText += `[Error processing page ${pageNum}]\n`;
+          }
         }
       } else {
-        // For images, we can use Tesseract directly with better preprocessing
+        // For images, use direct OCR processing
         setStatus('Processing image with enhanced OCR...');
         
         // Create URL for the image preview
@@ -158,7 +473,7 @@ function extractTextWithOCR(setStatus: React.Dispatch<React.SetStateAction<strin
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         
         if (!ctx) {
           throw new Error('Could not create canvas context for image preprocessing');
@@ -168,7 +483,73 @@ function extractTextWithOCR(setStatus: React.Dispatch<React.SetStateAction<strin
         ctx.drawImage(img, 0, 0);
         
         try {
-          // Apply preprocessing to improve OCR
+          // Apply advanced preprocessing similar to PDF processing
+          // Get the image data
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          
+          // Step 1: Convert to grayscale with improved accuracy
+          for (let i = 0; i < data.length; i += 4) {
+            // Weighted grayscale conversion
+            const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            data[i] = gray;
+            data[i + 1] = gray;
+            data[i + 2] = gray;
+          }
+          
+          // Step 2: Calculate histogram for adaptive thresholding
+          const histogram = new Array(256).fill(0);
+          for (let i = 0; i < data.length; i += 4) {
+            histogram[Math.floor(data[i])]++;
+          }
+          
+          // Step 3: Find the optimal threshold using Otsu's method
+          let sum = 0;
+          for (let i = 0; i < 256; i++) {
+            sum += i * histogram[i];
+          }
+          
+          let sumB = 0;
+          let wB = 0;
+          let wF = 0;
+          let maxVariance = 0;
+          let threshold = 0;
+          const total = data.length / 4;
+          
+          for (let t = 0; t < 256; t++) {
+            wB += histogram[t];
+            if (wB === 0) continue;
+            
+            wF = total - wB;
+            if (wF === 0) break;
+            
+            sumB += t * histogram[t];
+            const mB = sumB / wB;
+            const mF = (sum - sumB) / wF;
+            
+            const variance = wB * wF * Math.pow(mB - mF, 2);
+            
+            if (variance > maxVariance) {
+              maxVariance = variance;
+              threshold = t;
+            }
+          }
+          
+          // Step 4: Apply adaptive thresholding and increase contrast
+          for (let i = 0; i < data.length; i += 4) {
+            // Apply threshold with a small bias to enhance text
+            const val = data[i] < (threshold + 10) ? 0 : 255;
+            data[i] = val;
+            data[i + 1] = val;
+            data[i + 2] = val;
+          }
+          
+          ctx.putImageData(imageData, 0, 0);
+        } catch (preprocessingError) {
+          console.warn('Advanced image preprocessing failed, reverting to basic preprocessing:', preprocessingError);
+          
+          // Fall back to simple thresholding if advanced fails
+          try {
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = imageData.data;
           
@@ -184,43 +565,89 @@ function extractTextWithOCR(setStatus: React.Dispatch<React.SetStateAction<strin
           }
           
           ctx.putImageData(imageData, 0, 0);
-        } catch (preprocessingError) {
-          console.warn('Image preprocessing failed, proceeding with original image:', preprocessingError);
+          } catch (basicError) {
+            console.error('Basic preprocessing also failed:', basicError);
+          }
         }
         
         // Get the processed image data
         const processedImageUrl = canvas.toDataURL('image/png');
         setFilePreviewUrl(processedImageUrl);
         
-        // Initialize Tesseract with advanced settings
-        const worker = await createWorker('eng');
+        // Set a timeout to prevent OCR from hanging
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('OCR timed out')), 60000); // 60 second timeout
+        });
+        
+        try {
+          // Initialize Tesseract with advanced settings and progress reporting
+          const worker = await createWorker('eng', 1, {
+            logger: progress => {
+              if (progress.status === 'recognizing text') {
+                setStatus(`OCR progress: ${Math.round(progress.progress * 100)}%`);
+              }
+            }
+          });
         
         // Advanced configuration for Tesseract
         await worker.setParameters({
-          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-/.: ',
+            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-/.:,\'() ',
           tessjs_create_hocr: '0',
           tessjs_create_tsv: '0',
+            tessedit_ocr_engine_mode: '3', // Use LSTM engine only for better accuracy
+            tessedit_pageseg_mode: '6', // Assume uniform block of text
+            textord_heavy_nr: '1', // Heavy noise removal
+            textord_min_linesize: '3.0', // Helps with smaller text
         });
         
-        // Extract text
-        const { data } = await worker.recognize(canvas);
+          // Extract text with timeout
+          const { data } = await Promise.race([
+            worker.recognize(canvas),
+            timeoutPromise
+          ]) as any;
+          
         extractedText = data.text;
         
         // Store debug data
         debugData.push({
           page: 1,
           text: data.text,
-          confidence: data.confidence
+            confidence: data.confidence,
+            wordConfidences: data.words ? data.words.map(w => ({ word: w.text, confidence: w.confidence })) : []
         });
         
         // Clean up
         await worker.terminate();
+        } catch (ocrError) {
+          console.error('OCR processing error:', ocrError);
+          toast.error(`OCR failed: ${ocrError.message}`);
+          throw ocrError;
+        }
       }
       
-      // Quality check - if confidence is too low or text length is too short
+      // Enhanced quality check for OCR results
       const avgConfidence = debugData.reduce((sum, item) => sum + item.confidence, 0) / debugData.length;
-      if (avgConfidence < 60 || extractedText.length < 100) {
-        console.warn(`Low quality OCR result: confidence ${avgConfidence}%, text length ${extractedText.length}`);
+      const wordCount = extractedText.split(/\s+/).filter(Boolean).length;
+      const hasKeyPhrases = /NBI|CLEARANCE|NATIONAL|BUREAU|investigation/i.test(extractedText);
+      
+      // Log detailed quality metrics for debugging
+      console.log('OCR Quality Metrics:', {
+        avgConfidence,
+        textLength: extractedText.length,
+        wordCount,
+        hasKeyPhrases,
+        detailedConfidence: debugData.map(d => ({ page: d.page, confidence: d.confidence }))
+      });
+      
+      // Warn about potentially low quality results
+      if (avgConfidence < 70 || wordCount < 50 || !hasKeyPhrases) {
+        console.warn(`Potentially low quality OCR result: confidence ${avgConfidence}%, words ${wordCount}`);
+        
+        if (avgConfidence < 50 && wordCount < 30) {
+          toast.warning('OCR quality is very low. The document may be unclear or poorly scanned.');
+        } else if (avgConfidence < 70) {
+          toast.info('OCR quality is moderate. Some text may not be accurately recognized.');
+        }
       }
       
       return { 
@@ -230,7 +657,18 @@ function extractTextWithOCR(setStatus: React.Dispatch<React.SetStateAction<strin
       };
     } catch (error) {
       console.error('OCR processing error:', error);
-      toast.error('OCR text extraction failed');
+      toast.error(`OCR text extraction failed: ${error.message}`);
+      
+      // Return partial results if available
+      if (extractedText.length > 0) {
+        toast.info('Returning partial OCR results');
+        return {
+          text: extractedText,
+          pageCount,
+          debug: debugData
+        };
+      }
+      
       throw error;
     }
   };
@@ -591,25 +1029,40 @@ export function UserVerification() {
 
     try {
       setLoading(true);
-      setStatus('Uploading document...');
+      setStatus('Uploading document to storage...');
 
       // 1. Upload file to Supabase storage bucket
       const fileExt = selectedFile.name.split('.').pop();
       const fileName = `verification-docs/${user.id}/${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError, data: uploadData } = await supabase.storage
         .from('verification-documents')
         .upload(fileName, selectedFile, {
           cacheControl: '3600',
-          upsert: false
+          upsert: true // Use upsert to replace existing file if needed
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        throw new Error(`Failed to upload document: ${uploadError.message}`);
+      }
+
+      if (!uploadData || !uploadData.path) {
+        throw new Error('Upload completed but no file path returned');
+      }
+
+      setStatus('Getting file URL...');
 
       // 2. Get the public URL
       const { data: { publicUrl } } = supabase.storage
         .from('verification-documents')
         .getPublicUrl(fileName);
+
+      if (!publicUrl) {
+        throw new Error('Failed to get public URL for uploaded document');
+      }
+
+      setStatus('Creating verification request...');
 
       // 3. Create verification request for admin review
       const { data, error: requestError } = await supabase
@@ -623,19 +1076,26 @@ export function UserVerification() {
         .select()
         .single();
 
-      if (requestError) throw requestError;
+      if (requestError) {
+        console.error('Verification request error:', requestError);
+        throw new Error(`Failed to create verification request: ${requestError.message}`);
+      }
 
       // 4. Update UI and show success message
       if (data) {
         setAdminVerificationId(data.id);
-      }
       setAdminVerificationStatus('pending');
       setSelectedFile(null);
-      toast.success('Document submitted for admin review');
+        toast.success('Document successfully submitted for admin review');
+      } else {
+        throw new Error('Verification request created but no data returned');
+      }
 
     } catch (error) {
-      console.error('Error:', error);
-      toast.error('Failed to submit document for review');
+      console.error('Submission error:', error);
+      toast.error(error.message || 'Failed to submit document for review');
+      // Don't update verification status on error
+      setAdminVerificationStatus('none');
     } finally {
       setLoading(false);
       setStatus('');
@@ -987,13 +1447,19 @@ export function UserVerification() {
             )}
 
             {adminVerificationStatus === 'pending' && (
-              <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
+              <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                 <div className="flex items-center gap-2">
-                  <Loader2 className="h-5 w-5 animate-spin text-yellow-500" />
+                  <Loader2 className="h-5 w-5 text-yellow-500" />
                   <p className="text-sm text-yellow-700">
-                    Your document is being reviewed by our admin team. We'll notify you once the review is complete.
+                    Your document has been submitted and is pending review by our admin team.
                   </p>
                 </div>
+                <p className="text-xs text-yellow-600 mt-2">
+                  Request ID: {adminVerificationId || 'Processing...'}
+                </p>
+                <p className="text-xs text-yellow-600 mt-1">
+                  Submitted on: {new Date().toLocaleDateString()}
+                </p>
               </div>
             )}
 

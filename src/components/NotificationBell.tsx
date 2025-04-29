@@ -42,8 +42,27 @@ interface ApplicationDetail {
   applicant_avatar?: string;
 }
 
+interface AuthUser {
+  id: string;
+  role?: string;
+}
+
+interface JobPost {
+  id: string;
+  title: string;
+  employer_id: string;
+}
+
+interface Profile {
+  id: string;
+  full_name: string;
+  avatar_url?: string;
+}
+
 export function NotificationBell() {
-  const { user, role } = useAuth();
+  const { user } = useAuth();
+  const authUser = user as AuthUser;
+  const role = authUser?.role;
   const isEmployer = role === 'employer';
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -51,7 +70,7 @@ export function NotificationBell() {
   const [applicationDetails, setApplicationDetails] = useState<Record<string, ApplicationDetail>>({});
 
   useEffect(() => {
-    if (!user) return;
+    if (!authUser) return;
 
     // Fetch notifications based on user role
     const fetchNotifications = async () => {
@@ -59,7 +78,7 @@ export function NotificationBell() {
         let query = supabase
           .from('notifications')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', authUser.id)
           .order('created_at', { ascending: false });
 
         if (isEmployer) {
@@ -67,7 +86,7 @@ export function NotificationBell() {
           const { data: employerJobs } = await supabase
             .from('job_posts')
             .select('id')
-            .eq('employer_id', user.id);
+            .eq('employer_id', authUser.id);
 
           if (employerJobs && employerJobs.length > 0) {
             const jobIds = employerJobs.map(job => job.id);
@@ -109,21 +128,21 @@ export function NotificationBell() {
               )
             `)
             .in('id', applicationIds)
-            .eq('job_post.employer_id', user.id);
+            .eq('job_post.employer_id', authUser.id);
 
           if (!appError && applications) {
             const detailsMap = applications.reduce((acc, app) => ({
               ...acc,
               [app.id]: {
                 id: app.id,
-                job_title: app.job_post?.title || 'Unknown Job',
-                applicant_name: app.profile?.full_name || 'Unknown Applicant',
+                job_title: app.job_post && Array.isArray(app.job_post) && app.job_post[0] ? app.job_post[0].title : 'Unknown Job',
+                applicant_name: app.profile && Array.isArray(app.profile) && app.profile[0] ? app.profile[0].full_name : 'Unknown Applicant',
                 applicant_email: app.email || 'No email provided',
                 contact_number: app.contact_number || 'No contact number',
                 status: app.status,
                 created_at: app.created_at,
                 resume_url: app.resume_url || undefined,
-                applicant_avatar: app.profile?.avatar_url || undefined
+                applicant_avatar: app.profile && Array.isArray(app.profile) && app.profile[0] ? app.profile[0].avatar_url : undefined
               }
             }), {});
 
@@ -145,7 +164,7 @@ export function NotificationBell() {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${user.id}`
+          filter: `user_id=eq.${authUser.id}`
         },
         async (payload) => {
           if (payload.eventType === 'INSERT') {
@@ -174,7 +193,7 @@ export function NotificationBell() {
                   )
                 `)
                 .eq('id', newNotification.metadata.application_id)
-                .eq('job_post.employer_id', user.id)
+                .eq('job_post.employer_id', authUser.id)
                 .single();
 
               if (data && !error) {
@@ -182,14 +201,14 @@ export function NotificationBell() {
                   ...prev,
                   [data.id]: {
                     id: data.id,
-                    job_title: data.job_post?.title || 'Unknown Job',
-                    applicant_name: data.profile?.full_name || 'Unknown Applicant',
+                    job_title: data.job_post && Array.isArray(data.job_post) && data.job_post[0] ? data.job_post[0].title : 'Unknown Job',
+                    applicant_name: data.profile && Array.isArray(data.profile) && data.profile[0] ? data.profile[0].full_name : 'Unknown Applicant',
                     applicant_email: data.email || 'No email provided',
                     contact_number: data.contact_number || 'No contact number',
                     status: data.status,
                     created_at: data.created_at,
                     resume_url: data.resume_url || undefined,
-                    applicant_avatar: data.profile?.avatar_url || undefined
+                    applicant_avatar: data.profile && Array.isArray(data.profile) && data.profile[0] ? data.profile[0].avatar_url : undefined
                   }
                 }));
               }
@@ -224,21 +243,24 @@ export function NotificationBell() {
               const newApplication = payload.new;
               
               // Check if this application is for one of the employer's job posts
-              const { data: jobPost, error } = await supabase
+              const { data: jobPostData, error } = await supabase
                 .from('job_posts')
-                .select('id, title')
+                .select('id, title, employer_id')
                 .eq('id', newApplication.job_post_id)
-                .eq('employer_id', user.id)
                 .single();
               
-              if (jobPost && !error) {
+              const jobPost = jobPostData as JobPost;
+              
+              // Fix: Check if the job post belongs to the current employer
+              if (jobPost && !error && jobPost.employer_id === authUser.id) {
                 // Get applicant details
-                const { data: applicant } = await supabase
+                const { data: applicantData } = await supabase
                   .from('profiles')
-                  .select('full_name')
+                  .select('id, full_name')
                   .eq('id', newApplication.job_seeker_id)
                   .single();
                 
+                const applicant = applicantData as Profile;
                 const applicantName = applicant?.full_name || 'Unknown';
                 
                 // Create a notification for the employer
@@ -248,17 +270,17 @@ export function NotificationBell() {
                 const { data: existingNotification } = await supabase
                   .from('notifications')
                   .select('id')
-                  .eq('user_id', user.id)
+                  .eq('user_id', authUser.id)
                   .eq('type', 'new_application')
                   .eq('metadata->application_id', newApplication.id)
                   .single();
                 
                 if (!existingNotification) {
-                  // Insert notification
+                  // Insert notification directly into the notifications table
                   await supabase
                     .from('notifications')
                     .insert({
-                      user_id: user.id,
+                      user_id: authUser.id,
                       type: 'new_application',
                       message: notificationMessage,
                       read: false,
@@ -287,7 +309,7 @@ export function NotificationBell() {
         supabase.removeChannel(applicationSubscription);
       }
     };
-  }, [user, isEmployer]);
+  }, [authUser, isEmployer]);
 
   // Mark notification as read
   const markAsRead = async (notificationId: string) => {
@@ -366,7 +388,7 @@ export function NotificationBell() {
           {unreadCount > 0 ? (
             <>
               <BellRing className="h-5 w-5 text-blue-600" />
-              <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-red-500">
+              <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-green-500">
                 {unreadCount}
               </Badge>
             </>

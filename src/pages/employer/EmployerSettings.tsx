@@ -1,54 +1,84 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../services/supabase';
-import { Bell, Lock, Mail, Shield, User } from 'lucide-react';
+import { Button } from '../../components/ui/button';
+import { Switch } from '../../components/ui/switch';
+import { Label } from '../../components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import { 
+  Bell, 
+  User, 
+  Mail, 
+  Building,
+  MessageSquare,
+  AlertTriangle,
+  Save,
+  AlertCircle
+} from 'lucide-react';
 import { toast } from 'sonner';
+
+interface NotificationSettings {
+  newApplications: boolean;
+  candidateMessages: boolean;
+  jobAlerts: boolean;
+  marketingEmails: boolean;
+}
 
 export function EmployerSettings() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [emailNotifications, setEmailNotifications] = useState({
+  const [emailNotifications, setEmailNotifications] = useState<NotificationSettings>({
     newApplications: true,
     candidateMessages: true,
     jobAlerts: true,
     marketingEmails: false
   });
+  const [profile, setProfile] = useState<any>(null);
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      toast.error('New passwords do not match');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) return;
+      
+      try {
+        // Fetch employer profile
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
 
       if (error) throw error;
-
-      toast.success('Password updated successfully');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+        setProfile(data);
+        
+        // Fetch notification settings
+        const { data: settings, error: settingsError } = await supabase
+          .from('employer_notification_settings')
+          .select('*')
+          .eq('employer_id', user.id)
+          .single();
+          
+        if (settingsError && settingsError.code !== 'PGRST116') {
+          throw settingsError;
+        }
+        
+        if (settings && settings.settings) {
+          setEmailNotifications(settings.settings);
+        }
     } catch (error) {
-      toast.error('Failed to update password');
-      console.error('Error updating password:', error);
-    } finally {
-      setLoading(false);
+        console.error('Error fetching profile:', error);
+        toast.error('Failed to load profile data');
     }
   };
+    
+    fetchProfile();
+  }, [user]);
 
-  const handleNotificationChange = async (setting: string) => {
+  const handleNotificationChange = (setting: keyof NotificationSettings) => {
     setEmailNotifications(prev => {
       const newSettings = {
         ...prev,
-        [setting]: !prev[setting as keyof typeof prev]
+        [setting]: !prev[setting]
       };
 
       // Update in database
@@ -56,7 +86,8 @@ export function EmployerSettings() {
         .from('employer_notification_settings')
         .upsert({
           employer_id: user?.id,
-          settings: newSettings
+          settings: newSettings,
+          updated_at: new Date().toISOString()
         })
         .then(({ error }) => {
           if (error) {
@@ -68,130 +99,166 @@ export function EmployerSettings() {
       return newSettings;
     });
   };
+  
+  const saveSettings = async () => {
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('employer_notification_settings')
+        .upsert({
+          employer_id: user?.id,
+          settings: emailNotifications,
+          updated_at: new Date().toISOString()
+        });
+        
+      if (error) throw error;
+      
+      toast.success('Settings saved successfully');
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast.error('Failed to save settings');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-8">Account Settings</h1>
+    <div className="container mx-auto py-8 max-w-4xl">
+      <h1 className="text-2xl font-bold mb-6">Employer Settings</h1>
 
-      <div className="space-y-8">
-        {/* Profile Section */}
-        <section className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center mb-4">
-            <User className="h-5 w-5 text-blue-600 mr-2" />
-            <h2 className="text-xl font-semibold">Profile Information</h2>
+      <div className="grid grid-cols-1 gap-6">
+        {/* Profile Summary */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building className="h-5 w-5 text-primary" />
+              Company Profile
+            </CardTitle>
+            <CardDescription>
+              Manage your company information
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-4">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <User className="h-6 w-6 text-primary" />
           </div>
-          <div className="text-gray-600 mb-4">
-            <p>Email: {user?.email}</p>
-            <p>Account Type: Employer</p>
+              <div>
+                <h3 className="text-lg font-medium">{profile?.full_name || 'Company Name'}</h3>
+                <p className="text-sm text-gray-500">{user?.email}</p>
           </div>
-          <button
-            onClick={() => window.location.href = '/employer/create-profile'}
-            className="text-blue-600 hover:text-blue-700 font-medium"
+              <div className="ml-auto">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => window.location.href = '/employer/company-profile'}
           >
-            Edit Company Profile →
-          </button>
-        </section>
-
-        {/* Security Section */}
-        <section className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center mb-4">
-            <Shield className="h-5 w-5 text-blue-600 mr-2" />
-            <h2 className="text-xl font-semibold">Security</h2>
-          </div>
-          <form onSubmit={handlePasswordChange} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Current Password
-              </label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                required
-              />
+                  Edit Company Profile
+                </Button>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                New Password
-              </label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Confirm New Password
-              </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? 'Updating...' : 'Update Password'}
-            </button>
-          </form>
-        </section>
+          </CardContent>
+        </Card>
 
         {/* Notifications Section */}
-        <section className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center mb-4">
-            <Bell className="h-5 w-5 text-blue-600 mr-2" />
-            <h2 className="text-xl font-semibold">Notification Preferences</h2>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-primary" />
+              Notification Preferences
+            </CardTitle>
+            <CardDescription>
+              Control which notifications you receive
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="h-4 w-4 text-gray-500" />
+                <Label htmlFor="new-applications">New Applications</Label>
           </div>
-          <div className="space-y-4">
-            {Object.entries(emailNotifications).map(([key, enabled]) => (
-              <div key={key} className="flex items-center justify-between">
-                <span className="text-gray-700">
-                  {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                </span>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={enabled}
-                    onChange={() => handleNotificationChange(key)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
+              <Switch
+                id="new-applications"
+                checked={emailNotifications.newApplications}
+                onCheckedChange={() => handleNotificationChange('newApplications')}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <MessageSquare className="h-4 w-4 text-gray-500" />
+                <Label htmlFor="candidate-messages">Candidate Messages</Label>
               </div>
-            ))}
+              <Switch
+                id="candidate-messages"
+                checked={emailNotifications.candidateMessages}
+                onCheckedChange={() => handleNotificationChange('candidateMessages')}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Bell className="h-4 w-4 text-gray-500" />
+                <Label htmlFor="job-alerts">Job Alerts</Label>
+              </div>
+              <Switch
+                id="job-alerts"
+                checked={emailNotifications.jobAlerts}
+                onCheckedChange={() => handleNotificationChange('jobAlerts')}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Mail className="h-4 w-4 text-gray-500" />
+                <Label htmlFor="marketing-emails">Marketing Emails</Label>
+              </div>
+              <Switch
+                id="marketing-emails"
+                checked={emailNotifications.marketingEmails}
+                onCheckedChange={() => handleNotificationChange('marketingEmails')}
+              />
           </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        {/* Delete Account Section */}
-        <section className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center mb-4">
-            <Lock className="h-5 w-5 text-red-600 mr-2" />
-            <h2 className="text-xl font-semibold">Delete Account</h2>
-          </div>
-          <p className="text-gray-600 mb-4">
-            Once you delete your account, there is no going back. Please be certain.
+        {/* Delete Account */}
+        <Card className="border-red-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              Danger Zone
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-500 mb-4">
+              Once you delete your account, there is no going back. This will delete all of your data including job posts, applications, and company information.
           </p>
-          <button
+            <Button 
+              variant="destructive"
             onClick={() => {
               if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
                 // Implement account deletion logic
                 toast.error('Account deletion is not implemented yet');
               }
             }}
-            className="text-red-600 hover:text-red-700 font-medium"
           >
             Delete Account
-          </button>
-        </section>
+            </Button>
+          </CardContent>
+        </Card>
+        
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <Button 
+            onClick={saveSettings} 
+            disabled={loading}
+            className="flex items-center gap-2"
+          >
+            <Save className="h-4 w-4" />
+            {loading ? 'Saving...' : 'Save Settings'}
+          </Button>
+        </div>
       </div>
     </div>
   );

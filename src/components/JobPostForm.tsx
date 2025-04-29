@@ -23,6 +23,8 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
   const [success, setSuccess] = useState(false);
   const [skills, setSkills] = useState<string[]>([]);
   const [newSkill, setNewSkill] = useState('');
+  const [showCustomCategory, setShowCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState('');
 
   const [formData, setFormData] = useState({
     title: '',
@@ -75,6 +77,13 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
+    if (name === 'category' && value === 'Other') {
+      setShowCustomCategory(true);
+    } else if (name === 'category' && value !== 'Other') {
+      setShowCustomCategory(false);
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -117,9 +126,15 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
     setSuccess(false);
 
     try {
+      // Apply custom category if selected
+      const finalCategory = formData.category === 'Other' && customCategory.trim() 
+        ? customCategory.trim() 
+        : formData.category;
+        
       // Prepare the job post data
       const jobPostData = {
         ...formData,
+        category: finalCategory,
         employer_id: user.id,
         status: 'active',
         created_at: new Date().toISOString(),
@@ -130,7 +145,6 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
         company_name: formData.company_name,
         company_logo_url: formData.company_logo_url,
         title: formData.title,
-        category: formData.category,
         budget: formData.budget,
         location: formData.location,
         experience_level: formData.experience_level,
@@ -279,6 +293,18 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
           <option value="Project Management">Project Management</option>
           <option value="Other">Other</option>
         </select>
+        
+        {showCustomCategory && (
+          <div className="mt-2">
+            <input
+              type="text"
+              value={customCategory}
+              onChange={(e) => setCustomCategory(e.target.value)}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="Enter custom category"
+            />
+          </div>
+        )}
       </div>
 
       <div>
@@ -417,7 +443,6 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
           >
             <option value="">Select job type</option>
-            <option value="Full-time">Full-time</option>
             <option value="Part-time">Part-time</option>
             <option value="Contract">Contract</option>
             <option value="Freelance">Freelance</option>
@@ -502,23 +527,18 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
       
       <div>
         <label htmlFor="experience_level" className="block text-sm font-medium text-gray-700">
-          Experience Level
+          Zip Code
         </label>
-        <select
+        <input
+          type="text"
           id="experience_level"
           name="experience_level"
           value={formData.experience_level}
           onChange={handleChange}
           required
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 hover:border-gray-400 transition-colors"
-        >
-          <option value="">Select experience level</option>
-          <option value="Entry Level">Entry Level</option>
-          <option value="Mid Level">Mid Level</option>
-          <option value="Senior">Senior</option>
-          <option value="Lead">Lead</option>
-          <option value="Manager">Manager</option>
-        </select>
+          placeholder="Enter zip code"
+        />
       </div>
 
       <div>
@@ -603,16 +623,20 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <CreditCard className="h-5 w-5 text-gray-400" />
           </div>
-          <input
-            type="text"
+          <select
             id="payment_method"
             name="payment_method"
             value={formData.payment_method}
             onChange={handleChange}
             required
             className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            placeholder="e.g., Bank Transfer or PayPal"
-          />
+          >
+            <option value="">Select payment method</option>
+            <option value="Pay by Cash">Cash</option>
+            <option value="Cash on Delivery">Cash on Delivery</option>
+            <option value="Cash on Pickup">Cash on Pickup</option>
+            <option value="Cash in Advance">Cash in Advance</option>
+          </select>
         </div>
       </div>
     </div>
@@ -669,7 +693,10 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center text-sm text-gray-700">
               <Briefcase className="h-5 w-5 mr-2 text-blue-500" />
-              <span className="font-medium">Category:</span> {formData.category}
+              <span className="font-medium">Category:</span>
+              <p className="text-sm text-gray-600 mt-1">
+                {formData.category === 'Other' && customCategory ? customCategory : formData.category}
+              </p>
             </div>
             <div className="flex items-center text-sm text-gray-700">
               <span className="flex items-center">
@@ -702,7 +729,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
         <h4 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Requirements</h4>
         <div className="space-y-5">
           <div>
-            <h5 className="text-sm font-medium text-gray-700">Experience Level</h5>
+            <h5 className="text-sm font-medium text-gray-700">Zip Code</h5>
             <p className="text-sm text-gray-600 mt-1">{formData.experience_level}</p>
           </div>
           <div>

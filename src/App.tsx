@@ -43,6 +43,7 @@ import { VerificationControl } from './pages/owner/VerificationControl';
 import { AdminVerificationControl } from './pages/admin/AdminVerificationControl';
 import { ApplicationsPage } from './pages/admin/ApplicationsPage';
 import { ApplicationsPage as EmployerApplicationsPage } from './pages/employer/ApplicationsPage';
+import { JobSeekerSettings } from './components/JobSeekerSettings';
 
 // Implement lazy loading for routes
 const JobSeekerDashboard = lazy(() => import('./components/JobSeekerDashboard').then(module => ({ default: module.JobSeekerDashboard })));
@@ -344,7 +345,7 @@ function App() {
                           allowedRoles={['job_seeker']}
                           fallbackPath="/select-role"
                         >
-                          <div>Settings Page</div>
+                          <JobSeekerSettings />
                         </RoleProtectedRoute>
                       </ProtectedRoute>
                     }
