@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import * as React from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Bell, BellRing, User, Briefcase, Calendar, CheckCircle, XCircle, Clock, FileText, Mail, Phone } from 'lucide-react';
@@ -42,7 +43,8 @@ interface ApplicationDetail {
 }
 
 export function NotificationBell() {
-  const { user, isEmployer } = useAuth();
+  const { user, role } = useAuth();
+  const isEmployer = role === 'employer';
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -69,7 +71,7 @@ export function NotificationBell() {
 
           if (employerJobs && employerJobs.length > 0) {
             const jobIds = employerJobs.map(job => job.id);
-            query = query.or(`job_post_id.in.(${jobIds})`);
+            query = query.or(`metadata->job_post_id.in.(${jobIds})`);
           }
         }
 
@@ -85,7 +87,7 @@ export function NotificationBell() {
           ?.filter(n => n.type === 'new_application' && n.metadata?.application_id)
           .map(n => n.metadata.application_id);
 
-        if (applicationIds?.length) {
+        if (applicationIds?.length && isEmployer) {
           const { data: applications, error: appError } = await supabase
             .from('job_applications')
             .select(`
@@ -95,33 +97,33 @@ export function NotificationBell() {
               status,
               created_at,
               resume_url,
-              job_posts!inner (
+              job_post:job_posts!inner (
                 id,
                 title,
                 employer_id
               ),
-              profiles!inner (
+              profile:profiles!inner (
                 id,
                 full_name,
                 avatar_url
               )
             `)
             .in('id', applicationIds)
-            .eq('job_posts.employer_id', user.id);
+            .eq('job_post.employer_id', user.id);
 
           if (!appError && applications) {
             const detailsMap = applications.reduce((acc, app) => ({
               ...acc,
               [app.id]: {
                 id: app.id,
-                job_title: app.job_posts?.title || 'Unknown Job',
-                applicant_name: app.profiles?.full_name || 'Unknown Applicant',
+                job_title: app.job_post?.title || 'Unknown Job',
+                applicant_name: app.profile?.full_name || 'Unknown Applicant',
                 applicant_email: app.email || 'No email provided',
                 contact_number: app.contact_number || 'No contact number',
                 status: app.status,
                 created_at: app.created_at,
                 resume_url: app.resume_url || undefined,
-                applicant_avatar: app.profiles?.avatar_url || undefined
+                applicant_avatar: app.profile?.avatar_url || undefined
               }
             }), {});
 
@@ -134,7 +136,7 @@ export function NotificationBell() {
       }
     };
 
-    // Set up real-time subscription
+    // Set up real-time subscription for notifications
     const notificationSubscription = supabase
       .channel('notifications')
       .on(
@@ -150,7 +152,7 @@ export function NotificationBell() {
             const newNotification = payload.new as Notification;
             
             // Fetch application details if it's a new application notification
-            if (newNotification.type === 'new_application' && newNotification.metadata?.application_id) {
+            if (newNotification.type === 'new_application' && newNotification.metadata?.application_id && isEmployer) {
               const { data, error } = await supabase
                 .from('job_applications')
                 .select(`
@@ -160,19 +162,19 @@ export function NotificationBell() {
                   status,
                   created_at,
                   resume_url,
-                  job_posts!inner (
+                  job_post:job_posts!inner (
                     id,
                     title,
                     employer_id
                   ),
-                  profiles!inner (
+                  profile:profiles!inner (
                     id,
                     full_name,
                     avatar_url
                   )
                 `)
                 .eq('id', newNotification.metadata.application_id)
-                .eq('job_posts.employer_id', user.id)
+                .eq('job_post.employer_id', user.id)
                 .single();
 
               if (data && !error) {
@@ -180,14 +182,14 @@ export function NotificationBell() {
                   ...prev,
                   [data.id]: {
                     id: data.id,
-                    job_title: data.job_posts?.title || 'Unknown Job',
-                    applicant_name: data.profiles?.full_name || 'Unknown Applicant',
+                    job_title: data.job_post?.title || 'Unknown Job',
+                    applicant_name: data.profile?.full_name || 'Unknown Applicant',
                     applicant_email: data.email || 'No email provided',
                     contact_number: data.contact_number || 'No contact number',
                     status: data.status,
                     created_at: data.created_at,
                     resume_url: data.resume_url || undefined,
-                    applicant_avatar: data.profiles?.avatar_url || undefined
+                    applicant_avatar: data.profile?.avatar_url || undefined
                   }
                 }));
               }
@@ -205,10 +207,85 @@ export function NotificationBell() {
       )
       .subscribe();
 
+    // Set up real-time subscription for job applications for employers
+    let applicationSubscription;
+    if (isEmployer) {
+      applicationSubscription = supabase
+        .channel('job_applications')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'job_applications'
+          },
+          async (payload) => {
+            if (payload.eventType === 'INSERT') {
+              const newApplication = payload.new;
+              
+              // Check if this application is for one of the employer's job posts
+              const { data: jobPost, error } = await supabase
+                .from('job_posts')
+                .select('id, title')
+                .eq('id', newApplication.job_post_id)
+                .eq('employer_id', user.id)
+                .single();
+              
+              if (jobPost && !error) {
+                // Get applicant details
+                const { data: applicant } = await supabase
+                  .from('profiles')
+                  .select('full_name')
+                  .eq('id', newApplication.job_seeker_id)
+                  .single();
+                
+                const applicantName = applicant?.full_name || 'Unknown';
+                
+                // Create a notification for the employer
+                const notificationMessage = `New application from ${applicantName} for "${jobPost.title}"`;
+                
+                // Check if notification already exists (to prevent duplicates)
+                const { data: existingNotification } = await supabase
+                  .from('notifications')
+                  .select('id')
+                  .eq('user_id', user.id)
+                  .eq('type', 'new_application')
+                  .eq('metadata->application_id', newApplication.id)
+                  .single();
+                
+                if (!existingNotification) {
+                  // Insert notification
+                  await supabase
+                    .from('notifications')
+                    .insert({
+                      user_id: user.id,
+                      type: 'new_application',
+                      message: notificationMessage,
+                      read: false,
+                      metadata: {
+                        application_id: newApplication.id,
+                        job_post_id: newApplication.job_post_id,
+                        applicant_id: newApplication.job_seeker_id,
+                        applicant_name: applicantName
+                      }
+                    });
+                  
+                  // This will trigger the notification subscription above
+                }
+              }
+            }
+          }
+        )
+        .subscribe();
+    }
+
     fetchNotifications();
 
     return () => {
       supabase.removeChannel(notificationSubscription);
+      if (applicationSubscription) {
+        supabase.removeChannel(applicationSubscription);
+      }
     };
   }, [user, isEmployer]);
 
@@ -256,9 +333,9 @@ export function NotificationBell() {
     if (isEmployer) {
       // Handle employer notifications
       if (notification.type === 'new_application' && notification.metadata?.application_id) {
-        navigate(`/employer/applications/${notification.metadata.application_id}`);
+        navigate(`/employer/applications`);
       } else if (notification.type === 'new_application' && notification.metadata?.job_post_id) {
-        navigate(`/employer/jobs/${notification.metadata.job_post_id}/applications`);
+        navigate(`/employer/applications?jobId=${notification.metadata.job_post_id}`);
       }
     } else {
       // Handle job seeker notifications

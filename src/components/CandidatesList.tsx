@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import * as React from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Loader2, Mail, Phone, Briefcase, User, Search } from 'lucide-react';
@@ -18,17 +19,21 @@ interface Candidate {
   has_applied?: boolean;
   application_count?: number;
   latest_application_date?: string;
-  // Removed location as it doesn't exist in the database
+  email?: string;
+  contact_number?: string;
 }
 
-export function CandidatesList() {
+interface CandidatesListProps {
+  filter?: 'all' | 'applied';
+  searchTerm?: string;
+  selectedSkills?: string[];
+}
+
+export function CandidatesList({ filter = 'all', searchTerm = '', selectedSkills = [] }: CandidatesListProps) {
   const { user } = useAuth();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [allSkills, setAllSkills] = useState<string[]>([]);
-  const [filter, setFilter] = useState<'all' | 'applied'>('all');
 
   useEffect(() => {
     fetchCandidates();
@@ -143,22 +148,17 @@ export function CandidatesList() {
   };
 
   const filteredCandidates = candidates.filter(candidate => {
-    // Update search to only look for name matches
-    const matchesSearch = candidate.full_name.toLowerCase().includes(searchTerm.toLowerCase());
+    // Filter by search term
+    const matchesSearch = searchTerm 
+      ? candidate.full_name.toLowerCase().includes(searchTerm.toLowerCase())
+      : true;
 
+    // Filter by selected skills
     const matchesSkills = selectedSkills.length === 0 || 
-      selectedSkills.every(skill => candidate.skills?.includes(skill));
+      selectedSkills.some(skill => candidate.skills?.includes(skill));
 
     return matchesSearch && matchesSkills;
   });
-
-  const handleSkillClick = (skill: string) => {
-    setSelectedSkills(prev => 
-      prev.includes(skill) 
-        ? prev.filter(s => s !== skill)
-        : [...prev, skill]
-    );
-  };
 
   const handleContact = async (candidateId: string, type: 'email' | 'phone') => {
     try {
@@ -184,112 +184,106 @@ export function CandidatesList() {
     );
   }
 
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 space-y-4">
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-            <Input
-              type="text"
-              placeholder="Search by name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+  if (filteredCandidates.length === 0) {
+    return (
+      <div className="bg-gray-50 rounded-lg p-12 text-center border border-gray-200">
+        <div className="flex flex-col items-center max-w-md mx-auto">
+          <div className="h-20 w-20 bg-gray-100 rounded-full flex items-center justify-center mb-6">
+            <User className="h-10 w-10 text-gray-400" />
           </div>
-          <Button
-            variant={filter === 'all' ? 'default' : 'outline'}
-            onClick={() => setFilter('all')}
-          >
-            All Candidates
-          </Button>
-          <Button
-            variant={filter === 'applied' ? 'default' : 'outline'}
-            onClick={() => setFilter('applied')}
-          >
-            Applied Candidates
-          </Button>
+          <h3 className="text-xl font-bold text-gray-800 mb-3">No Candidates Found</h3>
+          <p className="text-gray-600 mb-6">
+            {filter === 'applied' 
+              ? "No candidates have applied to your job postings yet."
+              : "No candidates match your current search criteria. Try adjusting your filters."}
+          </p>
         </div>
-
-        {allSkills.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {allSkills.map((skill) => (
-              <Badge
-                key={skill}
-                variant={selectedSkills.includes(skill) ? "default" : "outline"}
-                className="cursor-pointer"
-                onClick={() => handleSkillClick(skill)}
-              >
-                {skill}
-              </Badge>
-            ))}
-          </div>
-        )}
       </div>
+    );
+  }
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredCandidates.map((candidate) => (
-          <div key={candidate.id} className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4 mb-4">
-              {candidate.avatar_url ? (
-                <img 
-                  src={candidate.avatar_url} 
-                  alt={candidate.full_name}
-                  className="h-12 w-12 rounded-full object-cover"
-                />
-              ) : (
-                <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center">
-                  <User className="h-6 w-6 text-gray-500" />
-                </div>
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {filteredCandidates.map((candidate) => (
+        <div key={candidate.id} className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-4 mb-4">
+            {candidate.avatar_url ? (
+              <img 
+                src={candidate.avatar_url} 
+                alt={candidate.full_name}
+                className="h-12 w-12 rounded-full object-cover"
+              />
+            ) : (
+              <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center">
+                <User className="h-6 w-6 text-gray-500" />
+              </div>
+            )}
+            <div>
+              <h3 className="font-semibold text-lg">{candidate.full_name}</h3>
+              {candidate.is_verified && (
+                <Badge variant="secondary" className="mt-1">Verified</Badge>
               )}
-              <div>
-                <h3 className="font-semibold text-lg">{candidate.full_name}</h3>
-                {candidate.is_verified && (
-                  <Badge variant="secondary" className="mt-1">Verified</Badge>
+            </div>
+          </div>
+          
+          {candidate.bio && (
+            <p className="text-gray-700 text-sm mb-4 line-clamp-2">{candidate.bio}</p>
+          )}
+          
+          {candidate.skills && candidate.skills.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs text-gray-500 mb-2">Skills</p>
+              <div className="flex flex-wrap gap-1.5">
+                {candidate.skills.slice(0, 5).map((skill, index) => (
+                  <Badge key={index} variant="outline" className="text-xs">
+                    {skill}
+                  </Badge>
+                ))}
+                {candidate.skills.length > 5 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{candidate.skills.length - 5}
+                  </Badge>
                 )}
               </div>
             </div>
-
-            {candidate.bio && (
-              <p className="text-sm text-gray-600 mb-4">{candidate.bio}</p>
-            )}
-
-            {candidate.skills && candidate.skills.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-4">
-                {candidate.skills.map((skill, index) => (
-                  <Badge key={index} variant="secondary">{skill}</Badge>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-6 flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => handleContact(candidate.id, 'email')}
-                title={candidate.work_email}
+          )}
+          
+          <div className="flex flex-col gap-2 mt-4">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="justify-start"
+              onClick={() => handleContact(candidate.id, 'email')}
+            >
+              <Mail className="h-4 w-4 mr-2 text-blue-500" />
+              {candidate.email}
+            </Button>
+            
+            {candidate.contact_number && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="justify-start"
+                onClick={() => handleContact(candidate.id, 'phone')}
               >
-                <Mail className="h-4 w-4 mr-2" />
-                Email
+                <Phone className="h-4 w-4 mr-2 text-green-500" />
+                {candidate.contact_number}
               </Button>
-              {candidate.contact_number && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => handleContact(candidate.id, 'phone')}
-                  title={candidate.contact_number}
-                >
-                  <Phone className="h-4 w-4 mr-2" />
-                  Call
-                </Button>
-              )}
-            </div>
+            )}
           </div>
-        ))}
-      </div>
+          
+          {candidate.has_applied && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center text-sm text-gray-600">
+                <Briefcase className="h-4 w-4 mr-2 text-blue-500" />
+                <span>
+                  Applied to {candidate.application_count} {candidate.application_count === 1 ? 'job' : 'jobs'}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
