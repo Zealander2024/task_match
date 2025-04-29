@@ -129,6 +129,7 @@ export function Layout({ children }: LayoutProps) {
     { name: 'Dashboard', href: '/employer/dashboard', icon: Home },
     { name: 'Profile', href: '/employer/company-profile', icon: Building2 }, // Make sure this matches exactly
     { name: 'Candidates', href: '/employer/candidates', icon: Users },
+    { name: 'Applications', href: '/employer/applications', icon: FileText },
     { name: 'Settings', href: '/employer/settings', icon: Settings },
   ];
 

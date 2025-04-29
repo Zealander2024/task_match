@@ -42,6 +42,7 @@ import { ProfileCreation } from './pages/ProfileCreation';
 import { VerificationControl } from './pages/owner/VerificationControl';
 import { AdminVerificationControl } from './pages/admin/AdminVerificationControl';
 import { ApplicationsPage } from './pages/admin/ApplicationsPage';
+import { ApplicationsPage as EmployerApplicationsPage } from './pages/employer/ApplicationsPage';
 
 // Implement lazy loading for routes
 const JobSeekerDashboard = lazy(() => import('./components/JobSeekerDashboard').then(module => ({ default: module.JobSeekerDashboard })));
@@ -178,9 +179,9 @@ function Home() {
             </div>
           ))}
         </div>
-      </div>
     </div>
-  );
+  </div>
+);
 }
 
 function App() {
@@ -196,13 +197,13 @@ function App() {
     <Router>
       <ThemeProvider>
         <div className="app">
-          <AuthProvider>
+      <AuthProvider>
             <AdminAuthProvider>
               <Suspense fallback={<LoadingSpinner />}>
-                <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/signin" element={<SignIn />} />
-                  <Route path="/signup" element={<SignUp />} />
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/signin" element={<SignIn />} />
+            <Route path="/signup" element={<SignUp />} />
                   <Route path="/auth/callback" element={<AuthCallback />} />
                   <Route
                     path="/welcome"
@@ -246,15 +247,15 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route
-                    path="/select-role"
-                    element={
-                      <ProtectedRoute>
-                        <SelectRole />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
+            <Route
+              path="/select-role"
+              element={
+                <ProtectedRoute>
+                  <SelectRole />
+                </ProtectedRoute>
+              }
+            />
+            <Route
                     path="/profile/edit"
                     element={
                       <ProtectedRoute>
@@ -307,6 +308,22 @@ function App() {
                     }
                   />
                   <Route
+                    path="/employer/applications"
+                    element={
+                      <RoleProtectedRoute allowedRoles={['employer']} fallbackPath="/signin">
+                        <EmployerApplicationsPage />
+                      </RoleProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/employer/applications/:jobId"
+                    element={
+                      <RoleProtectedRoute allowedRoles={['employer']} fallbackPath="/signin">
+                        <EmployerApplicationsPage />
+                      </RoleProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/applications"
                     element={
                       <ProtectedRoute>
@@ -354,13 +371,13 @@ function App() {
                   />
                   <Route
                     path="/employer/create-profile"
-                    element={
-                      <ProtectedRoute>
+              element={
+                <ProtectedRoute>
                         <EmployerProfileForm />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
+                </ProtectedRoute>
+              }
+            />
+            <Route
                     path="/employer/company-profile"
                     element={
                       <ProtectedRoute>
@@ -376,12 +393,12 @@ function App() {
                   {/* Owner routes */}
                   <Route
                     path="/owner/verification-control"
-                    element={
-                      <ProtectedRoute>
+              element={
+                <ProtectedRoute>
                         <VerificationControl />
-                      </ProtectedRoute>
-                    }
-                  />
+                </ProtectedRoute>
+              }
+            />
                   {/* Admin routes */}
                   <Route path="/admin/create-first-admin" element={<CreateFirstAdmin />} />
                   <Route path="/admin/login" element={<AdminLogin />} />
@@ -404,9 +421,9 @@ function App() {
                           </Routes>
                         </AdminLayout>
                       </AdminProtectedRoute>
-                    }
-                  />
-                </Routes>
+              }
+            />
+          </Routes>
               </Suspense>
               <Toaster />
             </AdminAuthProvider>
