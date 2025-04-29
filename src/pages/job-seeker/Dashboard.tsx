@@ -146,12 +146,12 @@ export function Dashboard() {
       
       setJobs(data || []);
       setTotalJobs(count || 0);
-    } catch (error) {
+      } catch (error) {
       console.error('Search error:', error);
       setError('Failed to fetch jobs. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+      } finally {
+        setLoading(false);
+      }
   }, [searchState, buildSearchQuery]);
 
   useEffect(() => {
@@ -231,7 +231,7 @@ export function Dashboard() {
                 itemsPerPage={searchState.perPage}
                 totalItems={totalJobs}
               />
-            </div>
+                      </div>
           )}
         </div>
       </div>

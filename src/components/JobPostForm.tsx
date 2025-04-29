@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import * as React from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -6,14 +7,13 @@ import {
   CheckCircle2, XCircle, ArrowRight, ArrowLeft, Plus, X, Tag, Building2,
   Upload, Image as ImageIcon, User
 } from 'lucide-react';
-import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
 interface JobPostFormProps {
   onSuccess?: () => void;
 }
 
-type FormStep = 'basic' | 'company' | 'details' | 'requirements' | 'preview';
+type FormStep = 'basic' | 'profile' | 'details' | 'requirements' | 'preview';
 
 export function JobPostForm({ onSuccess }: JobPostFormProps) {
   const { user } = useAuth();
@@ -187,7 +187,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
 
   const steps = [
     { id: 'basic', label: 'Basic Info' },
-    { id: 'company', label: ' Info' },
+    { id: 'profile', label: 'Profile' },
     { id: 'details', label: 'Job Details' },
     { id: 'requirements', label: 'Requirements' },
     { id: 'preview', label: 'Preview' },
@@ -199,16 +199,26 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
         {steps.map((step, index) => (
           <div key={step.id} className="flex items-center">
             <div
-              className={`flex items-center justify-center w-8 h-8 rounded-full ${
+              className={`flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200 ${
                 currentStep === step.id
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-600'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : index < steps.findIndex(s => s.id === currentStep)
+                    ? 'bg-green-100 text-green-600 border border-green-200'
+                    : 'bg-gray-100 text-gray-500'
               }`}
             >
-              {index + 1}
+              {index < steps.findIndex(s => s.id === currentStep) ? (
+                <CheckCircle2 className="h-5 w-5" />
+              ) : (
+                index + 1
+              )}
             </div>
             {index < steps.length - 1 && (
-              <div className="w-24 h-1 mx-2 bg-gray-200" />
+              <div className={`w-24 h-1 mx-2 ${
+                index < steps.findIndex(s => s.id === currentStep)
+                  ? 'bg-green-200'
+                  : 'bg-gray-200'
+              }`} />
             )}
           </div>
         ))}
@@ -230,6 +240,8 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
 
   const renderBasicInfo = () => (
     <div className="space-y-6">
+      <h2 className="text-xl font-bold text-gray-800 mb-6 pb-2 border-b border-gray-200">Job Information</h2>
+      
       <div>
         <label htmlFor="title" className="block text-sm font-medium text-gray-700">
           Job Title
@@ -241,7 +253,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
           value={formData.title}
           onChange={handleChange}
           required
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 hover:border-gray-400 transition-colors"
           placeholder="e.g., Senior Frontend Developer"
         />
       </div>
@@ -274,29 +286,32 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
           Job Description
         </label>
         <div className="mt-1">
-          <ReactQuill
+          <textarea
+            id="description"
             value={formData.description}
-            onChange={handleDescriptionChange}
-            className="h-48 mb-12"
-            modules={{
-              toolbar: [
-                [{ 'header': [1, 2, 3, false] }],
-                ['bold', 'italic', 'underline', 'strike'],
-                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                ['link', 'clean']
-              ]
-            }}
+            onChange={(e) => handleDescriptionChange(e.target.value)}
+            rows={10}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            placeholder="Enter detailed job description..."
           />
         </div>
       </div>
     </div>
   );
 
-  const renderCompanyInfo = () => (
+  const renderProfileInfo = () => (
     <div className="space-y-6">
+      <h2 className="text-xl font-bold text-gray-800 mb-6 pb-2 border-b border-gray-200">Profile Information</h2>
+      
+      <div className="bg-blue-50 rounded-lg p-4 mb-6 border-l-4 border-blue-400">
+        <p className="text-sm text-blue-700">
+          This information will be displayed alongside your job posting to help applicants identify your organization.
+        </p>
+      </div>
+      
       <div>
         <label htmlFor="company_name" className="block text-sm font-medium text-gray-700">
-          Name
+          Organization Name
         </label>
         <div className="mt-1 relative rounded-md shadow-sm">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -309,8 +324,8 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
             value={formData.company_name}
             onChange={handleChange}
             required
-            className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            placeholder="Enter your company name"
+            className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 hover:border-gray-400 transition-colors"
+            placeholder="Enter your organization name"
           />
         </div>
       </div>
@@ -334,7 +349,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
           />
         </div>
         <p className="mt-1 text-sm text-gray-500">
-          Enter a direct URL to your company logo image
+          Enter a direct URL to your organization logo image
         </p>
       </div>
     </div>
@@ -342,14 +357,16 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
 
   const renderJobDetails = () => (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4">
+      <h2 className="text-xl font-bold text-gray-800 mb-6 pb-2 border-b border-gray-200">Job Details</h2>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label htmlFor="budget" className="block text-sm font-medium text-gray-700">
             Budget
           </label>
           <div className="mt-1 relative rounded-md shadow-sm">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <DollarSign className="h-5 w-5 text-gray-400" />
+              <span className="text-gray-500 font-medium">₱</span>
             </div>
             <input
               type="text"
@@ -358,8 +375,8 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
               value={formData.budget}
               onChange={handleChange}
               required
-              className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              placeholder="e.g., Php 1,500 per hour"
+              className="pl-8 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 hover:border-gray-400 transition-colors"
+              placeholder="e.g., 1,500 per hour"
             />
           </div>
         </div>
@@ -379,7 +396,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
               value={formData.location}
               onChange={handleChange}
               required
-              className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 hover:border-gray-400 transition-colors"
               placeholder="e.g., Remote (Makati City, optional office)"
             />
           </div>
@@ -475,6 +492,14 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
 
   const renderRequirements = () => (
     <div className="space-y-6">
+      <h2 className="text-xl font-bold text-gray-800 mb-6 pb-2 border-b border-gray-200">Requirements & Qualifications</h2>
+      
+      <div className="bg-amber-50 rounded-lg p-4 mb-6 border-l-4 border-amber-400">
+        <p className="text-sm text-amber-700">
+          Clearly defined requirements help attract qualified candidates and reduce unqualified applications.
+        </p>
+      </div>
+      
       <div>
         <label htmlFor="experience_level" className="block text-sm font-medium text-gray-700">
           Experience Level
@@ -485,7 +510,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
           value={formData.experience_level}
           onChange={handleChange}
           required
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 hover:border-gray-400 transition-colors"
         >
           <option value="">Select experience level</option>
           <option value="Entry Level">Entry Level</option>
@@ -595,26 +620,34 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
 
   const renderPreview = () => (
     <div className="space-y-6">
-      <div className="bg-white shadow-sm rounded-lg p-6">
-        <div className="flex items-center space-x-4 mb-4">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6 pb-2 border-b-2 border-gray-300">Preview Job Posting</h2>
+      
+      <div className="bg-blue-50 rounded-lg p-4 mb-6 border-l-4 border-blue-500 shadow-sm">
+        <p className="text-sm text-blue-700 font-medium">
+          Please review your job posting carefully. This is how it will appear to potential applicants.
+        </p>
+      </div>
+
+      <div className="bg-white shadow-lg rounded-lg p-6 border border-gray-200 hover:shadow-xl transition-shadow">
+        <div className="flex items-center space-x-4 mb-6">
           {formData.company_logo_url ? (
             <img
               src={formData.company_logo_url}
               alt={formData.company_name}
-              className="h-12 w-12 object-contain rounded-lg border border-gray-200"
+              className="h-16 w-16 object-contain rounded-lg border border-gray-200"
             />
           ) : (
-            <div className="h-12 w-12 flex items-center justify-center bg-gray-100 rounded-lg">
-              <Building2 className="h-6 w-6 text-gray-400" />
+            <div className="h-16 w-16 flex items-center justify-center bg-gray-100 rounded-lg">
+              <Building2 className="h-10 w-10 text-gray-400" />
             </div>
           )}
           <div>
-            <h3 className="text-xl font-semibold text-gray-900">{formData.company_name}</h3>
-            <p className="text-lg font-medium text-gray-900">{formData.title}</p>
+            <h3 className="text-2xl font-bold text-gray-900">{formData.company_name || 'Company Name'}</h3>
+            <p className="text-xl font-medium text-gray-800">{formData.title || 'Job Title'}</p>
           </div>
         </div>
 
-        <div className="flex items-center space-x-4 mb-4 pt-4 border-t border-gray-200">
+        <div className="flex items-center space-x-4 mb-6 pt-4 border-t border-gray-200">
           {formData.employer_avatar_url ? (
             <img
               src={formData.employer_avatar_url}
@@ -632,41 +665,45 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="flex items-center text-sm text-gray-500">
-            <Briefcase className="h-4 w-4 mr-2" />
-            {formData.category}
-          </div>
-          <div className="flex items-center text-sm text-gray-500">
-            <DollarSign className="h-4 w-4 mr-2" />
-            {formData.budget}
-          </div>
-          <div className="flex items-center text-sm text-gray-500">
-            <MapPin className="h-4 w-4 mr-2" />
-            {formData.location}
-          </div>
-          <div className="flex items-center text-sm text-gray-500">
-            <Clock className="h-4 w-4 mr-2" />
-            {formData.work_schedule}
-          </div>
-          <div className="flex items-center text-sm text-gray-500">
-            <Calendar className="h-4 w-4 mr-2" />
-            {formData.start_date} - {formData.end_date}
+        <div className="space-y-6 bg-gray-50 p-4 rounded-lg">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center text-sm text-gray-700">
+              <Briefcase className="h-5 w-5 mr-2 text-blue-500" />
+              <span className="font-medium">Category:</span> {formData.category}
+            </div>
+            <div className="flex items-center text-sm text-gray-700">
+              <span className="flex items-center">
+                <span className="mr-2 font-medium text-green-600">₱</span>
+                <span className="font-medium">Budget:</span> {formData.budget.replace('$', '')}
+              </span>
+            </div>
+            <div className="flex items-center text-sm text-gray-700">
+              <MapPin className="h-5 w-5 mr-2 text-blue-500" />
+              <span className="font-medium">Location:</span> {formData.location}
+            </div>
+            <div className="flex items-center text-sm text-gray-700">
+              <Clock className="h-5 w-5 mr-2 text-blue-500" />
+              <span className="font-medium">Schedule:</span> {formData.work_schedule}
+            </div>
+            <div className="flex items-center text-sm text-gray-700 col-span-2">
+              <Calendar className="h-5 w-5 mr-2 text-blue-500" />
+              <span className="font-medium">Duration:</span> {formData.start_date} - {formData.end_date}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white shadow-sm rounded-lg p-6">
-        <h4 className="text-lg font-medium text-gray-900 mb-3">Job Description</h4>
+      <div className="bg-white shadow-md rounded-lg p-6 border border-gray-100">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Job Description</h4>
         <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: formData.description }} />
       </div>
 
-      <div className="bg-white shadow-sm rounded-lg p-6">
-        <h4 className="text-lg font-medium text-gray-900 mb-3">Requirements</h4>
-        <div className="space-y-4">
+      <div className="bg-white shadow-md rounded-lg p-6 border border-gray-100">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Requirements</h4>
+        <div className="space-y-5">
           <div>
             <h5 className="text-sm font-medium text-gray-700">Experience Level</h5>
-            <p className="text-sm text-gray-500">{formData.experience_level}</p>
+            <p className="text-sm text-gray-600 mt-1">{formData.experience_level}</p>
           </div>
           <div>
             <h5 className="text-sm font-medium text-gray-700">Required Skills</h5>
@@ -683,21 +720,21 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
           </div>
           <div>
             <h5 className="text-sm font-medium text-gray-700">Additional Requirements</h5>
-            <p className="text-sm text-gray-500">{formData.additional_requirements}</p>
+            <p className="text-sm text-gray-600 mt-1">{formData.additional_requirements}</p>
           </div>
         </div>
       </div>
 
-      <div className="bg-white shadow-sm rounded-lg p-6">
-        <h4 className="text-lg font-medium text-gray-900 mb-3">Application Details</h4>
-        <div className="space-y-4">
+      <div className="bg-white shadow-md rounded-lg p-6 border border-gray-100">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Application Details</h4>
+        <div className="space-y-5">
           <div>
             <h5 className="text-sm font-medium text-gray-700">Application Instructions</h5>
-            <p className="text-sm text-gray-500">{formData.application_instructions}</p>
+            <p className="text-sm text-gray-600 mt-1">{formData.application_instructions}</p>
           </div>
           <div>
             <h5 className="text-sm font-medium text-gray-700">Payment Method</h5>
-            <p className="text-sm text-gray-500">{formData.payment_method}</p>
+            <p className="text-sm text-gray-600 mt-1">{formData.payment_method}</p>
           </div>
         </div>
       </div>
@@ -710,14 +747,14 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
 
       <div className="bg-white shadow-sm rounded-lg p-6">
         {currentStep === 'basic' && renderBasicInfo()}
-        {currentStep === 'company' && renderCompanyInfo()}
+        {currentStep === 'profile' && renderProfileInfo()}
         {currentStep === 'details' && renderJobDetails()}
         {currentStep === 'requirements' && renderRequirements()}
         {currentStep === 'preview' && renderPreview()}
       </div>
 
       {error && (
-        <div className="rounded-md bg-red-50 p-4">
+        <div className="rounded-md bg-red-50 p-4 border-l-4 border-red-500 animate-fade-in">
           <div className="flex">
             <div className="flex-shrink-0">
               <XCircle className="h-5 w-5 text-red-400" />
@@ -731,7 +768,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
       )}
 
       {success && (
-        <div className="rounded-md bg-green-50 p-4">
+        <div className="rounded-md bg-green-50 p-4 border-l-4 border-green-500 animate-pulse">
           <div className="flex">
             <div className="flex-shrink-0">
               <CheckCircle2 className="h-5 w-5 text-green-400" />
@@ -744,12 +781,12 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
         </div>
       )}
 
-      <div className="flex justify-between">
+      <div className="flex justify-between mt-8 pt-4 border-t border-gray-200">
         {currentStep !== 'basic' && (
           <button
             type="button"
             onClick={() => setCurrentStep(steps[steps.findIndex(s => s.id === currentStep) - 1].id as FormStep)}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-sm"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Previous
@@ -759,7 +796,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
           <button
             type="button"
             onClick={() => setCurrentStep(steps[steps.findIndex(s => s.id === currentStep) + 1].id as FormStep)}
-            className="ml-auto inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="ml-auto inline-flex items-center px-5 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
           >
             Next
             <ArrowRight className="h-4 w-4 ml-2" />
@@ -768,9 +805,22 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
           <button
             type="submit"
             disabled={loading}
-            className="ml-auto inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            className="ml-auto inline-flex items-center px-5 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Posting...' : 'Post Job'}
+            {loading ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Posting...
+              </>
+            ) : (
+              <>
+                Post Job
+                <CheckCircle2 className="h-4 w-4 ml-2" />
+              </>
+            )}
           </button>
         )}
       </div>

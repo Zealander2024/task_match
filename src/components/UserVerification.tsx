@@ -306,7 +306,7 @@ export function UserVerification() {
     };
 
     console.log("OCR Text to validate:", text);
-    
+
     // Check if it contains key NBI Clearance indicators
     const isNBIClearance = text.match(/NATIONAL\s+BUREAU\s+OF\s+INVESTIGATION|NBI\s+CLEARANCE|NBI\s+ID|THIS\s+IS\s+TO\s+CERTIFY/i);
     
@@ -314,8 +314,8 @@ export function UserVerification() {
       validationErrors.push('Document does not appear to be an NBI Clearance. Please ensure you uploaded the correct document.');
       result.validationErrors = validationErrors;
       return result;
-    }
-    
+    } 
+
     // Extract NBI Number
     const nbiMatch = text.match(nbiPatterns.nbiNumber);
     result.nbiNumber = nbiMatch ? nbiMatch[1] : null;
@@ -422,7 +422,7 @@ export function UserVerification() {
           levenshteinMatch,
           matchingParts: matchingParts
         };
-        
+
         if (!result.nameMatch) {
           validationErrors.push('Name on NBI Clearance does not match your profile name. Please ensure your profile name matches the document exactly.');
         }
@@ -523,7 +523,7 @@ export function UserVerification() {
     try {
       setLoading(true);
       setExtractedData(null);
-      
+
       let extractionResult;
       
       // Use the selected extraction method
@@ -847,15 +847,15 @@ export function UserVerification() {
           <div className="mt-6 bg-white shadow-lg rounded-xl border border-gray-100">
             <div className="p-4 border-b border-gray-100">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 mb-2">
-                  {extractedData.validationResult.isValid && extractedData.validationResult.nameMatch ? (
-                    <ShieldCheck className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <ShieldAlert className="h-5 w-5 text-red-500" />
-                  )}
-                  <h4 className="text-lg font-semibold">
-                    Verification Result
-                  </h4>
+              <div className="flex items-center gap-2 mb-2">
+                {extractedData.validationResult.isValid && extractedData.validationResult.nameMatch ? (
+                  <ShieldCheck className="h-5 w-5 text-green-500" />
+                ) : (
+                  <ShieldAlert className="h-5 w-5 text-red-500" />
+                )}
+                <h4 className="text-lg font-semibold">
+                  Verification Result
+                </h4>
                 </div>
                 <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600">
                   {extractionMethod === 'pdfjs' ? 'PDF Text Extraction' : 'OCR Image Processing'}
