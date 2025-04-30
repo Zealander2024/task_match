@@ -241,7 +241,7 @@ export function EmployerProfileForm() {
             </select>
           </div>
 
-          <div>
+          {/* <div>
             <label className="block text-sm font-medium text-gray-700">
               Company Size *
             </label>
@@ -258,7 +258,7 @@ export function EmployerProfileForm() {
                 </option>
               ))}
             </select>
-          </div>
+          </div> */}
 
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700">
@@ -275,7 +275,7 @@ export function EmployerProfileForm() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Headquarters Location *
+              Your Location *
             </label>
             <input
               type="text"

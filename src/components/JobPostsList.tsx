@@ -294,7 +294,7 @@ export function JobPostsList({ onJobSelect, filter, userId, onSaveStateChange }:
                     <span className="line-clamp-1">{job.location}</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <DollarSign className="w-4 h-4 text-gray-400" />
+                  ₱
                     <span className="line-clamp-1">{job.budget}</span>
                   </div>
                   <div className="flex items-center space-x-2">

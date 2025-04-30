@@ -27,7 +27,7 @@ const JobDetailsGrid = memo(({ job }: { job: JobPost }) => (
       <span className="text-gray-600">{job.location || 'Remote'}</span>
     </div>
     <div className="flex items-center space-x-2">
-      <DollarSign className="w-4 h-4 text-gray-400" />
+    ₱
       <span className="text-gray-600">{job.budget || 'Not specified'}</span>
     </div>
     <div className="flex items-center space-x-2">

@@ -527,7 +527,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
       
       <div>
         <label htmlFor="experience_level" className="block text-sm font-medium text-gray-700">
-          Zip Code
+          Zip code
         </label>
         <input
           type="text"
@@ -537,7 +537,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
           onChange={handleChange}
           required
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 hover:border-gray-400 transition-colors"
-          placeholder="Enter zip code"
+          placeholder="Enter your Zip code"
         />
       </div>
 
@@ -632,10 +632,7 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
             className="pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
           >
             <option value="">Select payment method</option>
-            <option value="Pay by Cash">Cash</option>
-            <option value="Cash on Delivery">Cash on Delivery</option>
-            <option value="Cash on Pickup">Cash on Pickup</option>
-            <option value="Cash in Advance">Cash in Advance</option>
+            <option value="Pay by Cash">Pay by Cash</option>
           </select>
         </div>
       </div>
@@ -853,5 +850,5 @@ export function JobPostForm({ onSuccess }: JobPostFormProps) {
       </div>
     </form>
   );
-} 
+}
 

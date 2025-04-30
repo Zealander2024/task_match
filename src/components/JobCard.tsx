@@ -26,7 +26,7 @@ export function JobCard({ job, onApply }: JobCardProps) {
             </div>
             <div className="flex items-center gap-1">
               <DollarSign className="h-4 w-4" />
-              <span>${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()}</span>
+              <span>₱{job.salary_min.toLocaleString()} - ₱{job.salary_max.toLocaleString()}</span>
             </div>
           </div>
 

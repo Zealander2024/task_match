@@ -30,7 +30,10 @@ import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { EmployerManagement } from './pages/admin/EmployerManagement';
 import { JobSeekerManagement } from './pages/admin/JobSeekerManagement';
 import { JobPostManagement } from './pages/admin/JobPostManagement';
-import { Reports } from './pages/admin/Reports';
+// Remove the incorrect import for Reports if it exists
+// import { Reports } from './pages/admin/Reports'; 
+// Add the correct import for ReportsManagement
+import { ReportsManagement } from './pages/admin/ReportsManagement';
 import { AdminSettings } from './pages/admin/AdminSettings';
 import { AdminProfileManagement } from './pages/admin/AdminProfileManagement';
 import { AdminProfile } from './components/AdminProfile';
@@ -168,7 +171,7 @@ function Home() {
             <div 
               key={feature.title}
               className="relative p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 animate-fade-in-up transform hover:-translate-y-1"
-              style={{ animationDelay: `${0.8 + index * 0.2}s` }}
+              style={{ animationDelay: `₱{0.8 + index * 0.2}s` }}
             >
               <div className="text-blue-600 mb-4 animate-bounce-subtle">
                 {feature.icon}
@@ -414,7 +417,8 @@ function App() {
                             <Route path="job-seekers" element={<JobSeekerManagement />} />
                             <Route path="verification" element={<AdminVerificationControl />} />
                             <Route path="job-posts" element={<JobPostManagement />} />
-                            <Route path="reports" element={<Reports />} />
+                            {/* Ensure the path is relative to the nested route */}
+                            <Route path="reports" element={<ReportsManagement />} />
                             <Route path="settings" element={<AdminSettings />} />
                             <Route path="profile" element={<AdminProfileManagement />} />
                             <Route path="applications" element={<ApplicationsPage />} />

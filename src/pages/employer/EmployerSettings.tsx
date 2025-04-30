@@ -14,9 +14,12 @@ import {
   MessageSquare,
   AlertTriangle,
   Save,
-  AlertCircle
+  AlertCircle,
+  Shield
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { EmployerIDVerification } from '../../components/EmployerIDVerification';
+import { VerificationStatus } from '../../components/VerificationStatus';
 
 interface NotificationSettings {
   newApplications: boolean;
@@ -142,21 +145,38 @@ export function EmployerSettings() {
             <div className="flex items-center space-x-4">
               <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                 <User className="h-6 w-6 text-primary" />
-          </div>
+              </div>
               <div>
                 <h3 className="text-lg font-medium">{profile?.full_name || 'Company Name'}</h3>
                 <p className="text-sm text-gray-500">{user?.email}</p>
-          </div>
+                <VerificationStatus profile={profile} />
+              </div>
               <div className="ml-auto">
                 <Button 
                   variant="outline" 
                   size="sm" 
                   onClick={() => window.location.href = '/employer/company-profile'}
-          >
+                >
                   Edit Company Profile
                 </Button>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* ID Verification Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              ID Verification
+            </CardTitle>
+            <CardDescription>
+              Verify your identity using any valid Philippine ID
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EmployerIDVerification />
           </CardContent>
         </Card>
 
@@ -176,7 +196,7 @@ export function EmployerSettings() {
               <div className="flex items-center space-x-2">
                 <AlertTriangle className="h-4 w-4 text-gray-500" />
                 <Label htmlFor="new-applications">New Applications</Label>
-          </div>
+              </div>
               <Switch
                 id="new-applications"
                 checked={emailNotifications.newApplications}
@@ -218,7 +238,7 @@ export function EmployerSettings() {
                 checked={emailNotifications.marketingEmails}
                 onCheckedChange={() => handleNotificationChange('marketingEmails')}
               />
-          </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -233,17 +253,17 @@ export function EmployerSettings() {
           <CardContent>
             <p className="text-sm text-gray-500 mb-4">
               Once you delete your account, there is no going back. This will delete all of your data including job posts, applications, and company information.
-          </p>
+            </p>
             <Button 
               variant="destructive"
-            onClick={() => {
-              if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-                // Implement account deletion logic
-                toast.error('Account deletion is not implemented yet');
-              }
-            }}
-          >
-            Delete Account
+              onClick={() => {
+                if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+                  // Implement account deletion logic
+                  toast.error('Account deletion is not implemented yet');
+                }
+              }}
+            >
+              Delete Account
             </Button>
           </CardContent>
         </Card>

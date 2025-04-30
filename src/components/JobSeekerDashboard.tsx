@@ -19,7 +19,7 @@ export function JobSeekerDashboard() {
     applied: 0,
     saved: 0,
     pending: 0,
-    interviews: 0,
+    accepted: 0,
     availableJobs: 0
   });
   const [loading, setLoading] = useState(true);
@@ -60,17 +60,17 @@ export function JobSeekerDashboard() {
         .eq('job_seeker_id', user.id)
         .eq('status', 'pending');
 
-      const { count: interviewCount } = await supabase
+      const { count: acceptedCount } = await supabase
         .from('job_applications')
         .select('*', { count: 'exact', head: true })
         .eq('job_seeker_id', user.id)
-        .eq('status', 'interviewing');
+        .eq('status', 'accepted');
 
       setStats({
         applied: appliedCount || 0,
         saved: savedCount || 0,
         pending: pendingCount || 0,
-        interviews: interviewCount || 0,
+        accepted: acceptedCount || 0,
         availableJobs: availableCount || 0
       });
     } catch (error) {
@@ -181,8 +181,8 @@ export function JobSeekerDashboard() {
                 <Trophy className="h-6 w-6 text-purple-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Interviews</p>
-                <p className="text-2xl font-semibold">{stats.interviews}</p>
+                <p className="text-sm text-gray-500">Accepted</p>
+                <p className="text-2xl font-semibold">{stats.accepted}</p>
               </div>
             </div>
           </Card>
@@ -244,7 +244,7 @@ export function JobSeekerDashboard() {
       />
     </div>
   );
-} 
+}
 
 
 

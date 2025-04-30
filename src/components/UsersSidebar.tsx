@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
-import { User, UserPlus, UserCheck, MessageCircle, X, Bell } from 'lucide-react';
+import { User, UserPlus, UserCheck, MessageCircle, X, Bell, Flag } from 'lucide-react';
 import type { Profile } from '../types/database';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -10,6 +10,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { ReportDialog } from './ReportDialog';
 
 interface UsersSidebarProps {
   onClose?: () => void;
@@ -34,6 +35,12 @@ export function UsersSidebar({ onClose }: UsersSidebarProps) {
   const [showAllUsers, setShowAllUsers] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{
+    id: string;
+    name: string;
+    type: 'user' | 'job' | 'message';
+  } | null>(null);
   
   // Calculate pagination
   const totalPages = Math.ceil(users.length / usersPerPage);
@@ -324,6 +331,15 @@ export function UsersSidebar({ onClose }: UsersSidebarProps) {
     }
   };
 
+  const handleReportUser = (userId: string, userName: string) => {
+    setReportTarget({
+      id: userId,
+      name: userName,
+      type: 'user'
+    });
+    setReportDialogOpen(true);
+  };
+
   return (
     <div className="fixed right-0 top-0 h-screen w-80 bg-white border-l border-gray-200 shadow-lg overflow-hidden">
       <div className="flex flex-col h-full">
@@ -442,6 +458,22 @@ export function UsersSidebar({ onClose }: UsersSidebarProps) {
                         </Tooltip>
                       </TooltipProvider>
 
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => handleReportUser(userProfile.id, userProfile.full_name || 'User')}
+                              className="p-2 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                            >
+                              <Flag className="h-4 w-4" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Report</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+
                       {user && (
                         <button
                           onClick={() => handleFollow(userProfile.id)}
@@ -497,6 +529,17 @@ export function UsersSidebar({ onClose }: UsersSidebarProps) {
           </div>
         )}
       </div>
+
+      {/* Report Dialog */}
+      {reportTarget && (
+        <ReportDialog
+          open={reportDialogOpen}
+          onOpenChange={setReportDialogOpen}
+          targetId={reportTarget.id}
+          targetType={reportTarget.type}
+          targetName={reportTarget.name}
+        />
+      )}
     </div>
   );
 }
